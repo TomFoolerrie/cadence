@@ -17,3 +17,6 @@ venv/
 
 # OS
 .DS_Store
+
+# Dry run output
+engagement-template-dry-run/

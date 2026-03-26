@@ -29,28 +29,43 @@ DEFAULT_ENGAGEMENT = "Test Corp"
 DEFAULT_SCHEMA_VERSION = 1
 
 SKILL_MD_TEMPLATE = """\
+---
+name: {name}
+description: >
+  TODO — describe what this folder produces.
+version: 0.1.0
+---
+
 # {name}
 
 ## Purpose
-<!-- What does this task produce? -->
+
+<!-- What does this produce? Which accounts does it touch? -->
 
 ## Data Sources
-<!-- Where does the input come from? -->
+
+<!-- Where does the data come from? Format? What if it's missing? -->
 
 ## Procedure
-<!-- Step-by-step instructions -->
+
+<!-- Step-by-step processing logic. Reference shared tools by path. -->
 
 ## Validation
-<!-- How to verify the output -->
 
-## Completion Criteria
-<!-- What artifacts must exist when done? -->
+<!-- How to verify the output is correct. -->
 
 ## Contacts
-<!-- Who to call when something breaks -->
+
+<!-- Who to ask when something goes wrong. -->
+
+## Completion Criteria
+
+<!-- What does a completed task look like? What artifacts must exist? -->
 """
 
 LEARNED_MD_TEMPLATE = """\
+# Learned Patterns
+
 ## Review History
 
 | Period | Outcome | Key Number | Note |
@@ -58,10 +73,19 @@ LEARNED_MD_TEMPLATE = """\
 
 ## Patterns
 
+<!-- Entries use structured delta format:
+- **Pattern description**
+  Confirmed: N | Contradicted: N | First seen: YYYY-MM
+  Used for: how this pattern informs execution
+-->
+
 ## What Didn't Work
 
-| Period | Attempted | Result | Fix |
-|--------|-----------|--------|-----|
+<!-- Entries use structured delta format:
+- **What was attempted**
+  Confirmed: N | Contradicted: N | First seen: YYYY-MM
+  Result: what happened | Fix: how it was resolved
+-->
 
 ## Open Questions
 """
