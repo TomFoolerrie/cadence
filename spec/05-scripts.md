@@ -2,7 +2,64 @@
 
 Per-script interface specifications for implementers. Each contract defines: arguments, preconditions, stdout, file writes, exit codes, and idempotency.
 
-For general failure behavior (exit codes, side-effect guarantees), see Section 6.7 in `05-scaffolding.md`.
+For general failure behavior (exit codes, side-effect guarantees), see Section 6.7 in `04-scaffolding.md`.
+
+---
+
+## `init-engagement.py`
+
+**Purpose:** Scaffolds a new engagement directory with git initialization.
+
+**Arguments:**
+
+| Argument | Position | Required | Values |
+|----------|----------|----------|--------|
+| `path` | 1 | Yes | Filesystem path for the new engagement directory |
+| `--name` | Named | No | Engagement name (default: title-cased basename of path) |
+
+**Preconditions:**
+
+| Condition | Check | On failure |
+|-----------|-------|------------|
+| Target path does not exist | `Path(path).resolve()` does not exist | Exit 1: `"Path already exists: <resolved-path>"` |
+| Parent directory is writable | Filesystem check (implicit via `mkdir`) | Exit 2: `"Filesystem error: ..."` |
+
+**File writes:**
+
+```
+<path>/
+├── .context-root       ← engagement: <name>, schema_version: 1
+├── AGENT.md            ← template with # <name>, ## Entity Details
+├── .claude/
+│   ├── tools/          ← empty directory
+│   └── settings.json   ← write scope: allow Read and Write(./*)
+├── .gitignore          ← ignores **/periods/*/data/, **/periods/*/workpapers/,
+│                         .context-cache/, .DS_Store
+└── requirements.txt    ← empty file
+```
+
+`<name>` is derived from the path basename by converting hyphens and underscores to spaces, then title-casing. Overridden by `--name` if provided.
+
+**Git behavior:** After writing files, runs:
+```
+git init
+git add .
+git commit -m "[init] <name>: engagement created"
+```
+
+If `git` is not available or any git command fails, exits 2.
+
+**Stdout:** None on success. Error message on failure (to stderr).
+
+**Idempotent:** No — exits 1 if path already exists.
+
+**Exit codes:**
+
+| Code | Condition |
+|------|-----------|
+| 0 | Engagement directory created with initial git commit |
+| 1 | Path already exists, or invalid arguments |
+| 2 | Filesystem error, git not available, or git command failed |
 
 ---
 
@@ -151,6 +208,62 @@ All other transitions exit 1.
 
 ---
 
+## `edit-class-yaml.py`
+
+**Purpose:** Agent/skill gateway for `.class.yaml` mutations. Validates inputs before writing.
+
+**Arguments:**
+
+Subcommand-based interface:
+
+| Subcommand | Positional Args | Named Args |
+|------------|----------------|------------|
+| `set-description` | `<description>` (required) | — |
+| `add-task` | `<task>` (required) | `--order <N>` (required), `--enabled`/`--no-enabled` (default: true), `--period-format <fmt>` (default: `monthly`), `--anchor <anchor>` (default: `first_monday`) |
+| `update-task` | `<task>` (required) | `--order <N>`, `--enabled`/`--no-enabled`, `--period-format <fmt>`, `--anchor <anchor>` (at least one required) |
+| `remove-task` | `<task>` (required) | — |
+
+**Valid enums:**
+
+- `period-format`: `monthly`, `weekly`, `quarterly`, `adhoc`
+- `anchor`: `first_monday`, `first_tuesday`, `first_wednesday`, `first_thursday`, `first_friday`, `last_monday`, `last_tuesday`, `last_wednesday`, `last_thursday`, `last_friday`, `monday`, `tuesday`, `wednesday`, `thursday`, `friday`, `saturday`, `sunday`
+
+**Preconditions:**
+
+| Condition | Check | On failure |
+|-----------|-------|------------|
+| cwd contains `.class.yaml` | File exists | Exit 1: `"No .class.yaml in current directory"` |
+| `.class.yaml` is valid YAML with `manifest` list | Parse and check | Exit 2: `"Corrupt .class.yaml"` / `"Corrupt .class.yaml: missing manifest"` |
+| `add-task`: task not already in manifest | Scan manifest | Exit 1: `"Task '<task>' already in manifest"` |
+| `add-task`: task directory exists with `SKILL.md` | Directory and file check | Exit 1: `"Task directory '<task>' does not exist"` / `"Task directory '<task>' has no SKILL.md"` |
+| `add-task`/`update-task`: `--order` must be positive | Value check | Exit 1: `"--order must be a positive integer"` |
+| `add-task`/`update-task`: enum values must be valid | Value check | Exit 1: `"Invalid period-format: '<value>'"` / `"Invalid anchor: '<value>'"` |
+| `update-task`/`remove-task`: task must be in manifest | Scan manifest | Exit 1: `"Task '<task>' not in manifest"` |
+| `update-task`: at least one field to update | Argument check | Exit 1: `"No fields provided to update"` |
+
+**File writes:** `.class.yaml` in cwd.
+
+| Subcommand | Fields modified |
+|------------|-----------------|
+| `set-description` | `description` |
+| `add-task` | Appends new entry to `manifest[]` with `task`, `order`, `enabled`, `period_format`, `anchor` |
+| `update-task` | Updates specified fields on existing manifest entry |
+| `remove-task` | Removes entry from `manifest[]` |
+
+**Stdout:** None on success. Error message on failure (to stderr).
+
+**Idempotent:** No — `add-task` rejects duplicates; `update-task` and `remove-task` require the task to exist.
+
+**Exit codes:**
+
+| Code | Condition |
+|------|-----------|
+| 0 | Mutation applied |
+| 1 | Validation error (missing `.class.yaml`, task not found, invalid enum, duplicate task) |
+| 2 | Corrupt `.class.yaml`, filesystem error |
+
+---
+
 ## `init-class.py`
 
 **Purpose:** Scaffolds a new class directory.
@@ -174,6 +287,8 @@ All other transitions exit 1.
 <name>/
 ├── .class.yaml         ← schema_version: 1, name: <Name>, description: "", manifest: []
 ├── AGENT.md            ← template with ## What This Class Covers, ## Key Concepts
+├── .claude/
+│   └── settings.json   ← write scope: allow Write(./**), deny Write(../**) and Write(./.class.yaml)
 ├── tools/              ← empty directory
 └── requirements.txt    ← empty file
 ```
@@ -221,8 +336,11 @@ All other transitions exit 1.
 │                         are interpolated from the argument.
 ├── learned.md          ← template (Review History table, Patterns, What Didn't Work,
 │                         Open Questions sections)
+├── reference.md        ← auto-generated quick-reference for plugin scripts and write restrictions
 ├── status.yaml         ← schema_version: 1, period: "", status: not_started,
 │                         issues: [], done_at: null
+├── .claude/
+│   └── settings.json   ← write scope: allow Write(./**), deny Write(../**) and Write(./status.yaml)
 ├── tools/              ← empty directory
 ├── periods/            ← empty directory
 └── requirements.txt    ← empty file
@@ -333,6 +451,59 @@ Runs on Cowork VM using system Python. Dependencies install globally within the 
 | 0 | All requirements installed (or already satisfied) |
 | 1 | No `.context-root` found |
 | 2 | pip install failed (network error, package not found, version conflict) |
+
+---
+
+## `start-setup.py`
+
+**Purpose:** Atomic setup phase for the `/start` skill. Wraps Steps 1–4 (set status, install deps, scaffold period, load context) into a single script call so the agent handles one exit code instead of four.
+
+**Arguments:**
+
+| Argument | Position | Required | Values |
+|----------|----------|----------|--------|
+| `--period` | Named | No | Period string — passed to `set-status.py` if `status.yaml` period is empty |
+
+**Preconditions:**
+
+| Condition | Check | On failure |
+|-----------|-------|------------|
+| cwd contains `status.yaml` | File exists | Exit 1: `"No status.yaml in current directory"` |
+| `status.yaml` is valid YAML | Parse | Exit 1: `"Corrupt status.yaml"` |
+| Period resolvable | Non-empty `period` in `status.yaml`, or `--period` provided | Exit 1: `"No period available — pass --period or ensure status.yaml has a period set"` |
+
+**Behavior:**
+
+Runs four scripts in sequence from the current (task) directory:
+
+1. **`set-status.py in_progress [--period <period>]`** — Transitions to `in_progress`. Only passes `--period` when current status is `not_started` and the period field is empty. For `in_progress` (crash recovery) and `review_ready` (rejected draft), omits `--period`.
+2. **`install-deps.py`** — Installs `requirements.txt` files top-down.
+3. **`init-period.py <period>`** — Scaffolds the period directory. Skipped if `periods/<period>/` already exists (crash recovery, re-execution).
+4. **`load-context.py --level task`** — Loads the full context chain.
+
+**Period resolution priority:**
+
+1. Non-empty `period` field in `status.yaml` (set by `check-periods.py` on reset, or from prior invocation)
+2. `--period` argument (agent-computed or user-provided for `adhoc` tasks)
+3. If both empty: exit 1. The wrapper is non-interactive — the agent must resolve the period before calling.
+
+**On failure (steps 2–4):** Calls `set-status.py blocked "<error message>"` before exiting. If `set-status.py blocked` itself fails, prints a warning to stderr but still exits 2.
+
+**On failure (step 1):** Exits with `set-status.py`'s return code directly. Does not attempt to set blocked — if the status transition failed, the task remains in its original state, which is recoverable.
+
+**Stdout:** `load-context.py` output on success (the context payload for the agent). No output on failure.
+
+**File writes:** `status.yaml` (via `set-status.py`), `periods/<period>/` (via `init-period.py`).
+
+**Idempotent:** Yes — `set-status.py in_progress` is a no-op when already `in_progress`; `init-period.py` is skipped if the directory exists; `install-deps.py` handles already-installed packages; `load-context.py` is a pure read.
+
+**Exit codes:**
+
+| Code | Condition |
+|------|-----------|
+| 0 | Setup complete, context printed to stdout |
+| 1 | Precondition error (no `status.yaml`, no period, invalid status transition) |
+| 2 | Script failure (status set to blocked) |
 
 ---
 

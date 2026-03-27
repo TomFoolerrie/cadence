@@ -32,7 +32,7 @@ abandoned    ──→ not_started       (check-periods.py — next anchor date 
 - **On `abandoned`:** The human determined this period's issue is unrecoverable (e.g., data was never available, engagement was paused). The agent records the reason in `issues[]`. `abandoned` is terminal for this period — the prior-period guard treats it equivalently to `done`, so a new period can begin. Set via `set-status.py` during the `/start` conversation.
 - **No automatic retries.** Human-in-the-loop for all recovery decisions in MVP.
 - **All tasks must reach a terminal state.** Every enabled task must reach `done` or `abandoned` before the class is considered done.
-- **Period advancement resets terminal states automatically.** `check-periods.py` runs on a schedule, reads each terminal task's `done_at` timestamp and `anchor` field, and resets tasks whose next period is due. This is the only mechanism that transitions out of a terminal state — it is a lifecycle event, not a within-period recovery. See Section 6.6.
+- **Period advancement resets terminal states automatically.** `check-periods.py` runs on a schedule, reads each terminal task's `done_at` timestamp and `anchor` field, and resets tasks whose next period is due. This is the only mechanism that transitions out of a terminal state — it is a lifecycle event, not a within-period recovery. See `04-scaffolding.md` Section 6.6.
 
 ## 4.2 Class-Level Status Protocol
 

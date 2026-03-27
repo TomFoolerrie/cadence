@@ -21,3 +21,13 @@ This spec gives plugins the ability to **project a structured context hierarchy 
 - **Fresh agent per task.** The folder is the memory, not the agent. A fresh instance reads the docs, runs the tools, produces output, and terminates. Nothing carries over except what's written to the folder.
 - **Git-versioned.** Every change is committed automatically. Full undo history, diffable state.
 - **Developer escape hatch.** Devs can hand-edit any file directly. The agent picks up their changes next session.
+
+---
+
+## 3. Portability
+
+The hierarchy **doesn't belong to the plugin that created it** — it belongs to the user. It's folders and markdown on a filesystem. Any runtime that knows how to walk the tree can load it. The plugin scaffolds the hierarchy, but after that, the hierarchy is a standalone artifact. It doesn't import anything from the plugin, doesn't reference the plugin by path, and doesn't require the plugin to be installed.
+
+**Today:** A plugin scaffolds the hierarchy on the user's Cowork VM. The agent manages it through conversation. **Tomorrow:** The same hierarchy could sit on a server — a headless agent, a CI pipeline, or any orchestrator that can parse YAML and run Python can execute it. `load-context.py` is a standalone script.
+
+Each plugin scaffolds its own hierarchy in a separate folder. No coordination needed — each has its own root context and independent class/task structure.

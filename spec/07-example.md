@@ -4,55 +4,7 @@ A user installs an accounting plugin and selects `~/Documents/Accounting/`.
 
 ## After setup and onboarding several tasks:
 
-```
-~/Documents/Accounting/
-├── .git/
-├── .gitignore
-├── .context-root                       ← YAML: engagement: "Acme Corp", schema_version: 1
-├── AGENT.md                            ← entity: Acme Corp, FYE Dec 31, GAAP
-├── .claude/
-│   └── tools/
-│       ├── je_formatter.py
-│       └── pdf_parser.py
-├── requirements.txt
-├── treasury/
-│   ├── .class.yaml                 ← orchestration manifest: 3 tasks, phase order
-│   ├── AGENT.md                    ← treasury class context for task agents
-│   ├── requirements.txt
-│   ├── tools/
-│   │   └── chase_parser.py         ← shared across treasury tasks
-│   ├── monthly-bank-fees/
-│   │   ├── SKILL.md                ← procedure for booking bank fees
-│   │   ├── learned.md              ← 6 months of patterns
-│   │   ├── status.yaml             ← last run: 2026-02, done
-│   │   ├── tools/
-│   │   │   └── fee_categorizer.py
-│   │   ├── requirements.txt
-│   │   └── periods/
-│   │       ├── 2025-09/
-│   │       ├── 2025-10/
-│   │       ├── ...
-│   │       └── 2026-02/
-│   │           ├── data/
-│   │           ├── workpapers/
-│   │           └── review-notes/
-│   ├── zba-entries/
-│   │   ├── SKILL.md
-│   │   ├── learned.md
-│   │   └── ...
-│   └── bank-reconciliation/
-│       ├── SKILL.md
-│       ├── learned.md
-│       └── ...
-├── reporting/
-│   ├── .class.yaml                 ← manifest: financial statements, board package
-│   ├── AGENT.md
-│   └── ...
-└── collections/
-    ├── .class.yaml
-    ├── AGENT.md
-    └── ...
-```
+The hierarchy after setup looks like the tree in Section 1 of `02-architecture.md`. Here is a populated example after onboarding three treasury tasks, a reporting class, and a collections class:
 
 ## A typical close cycle:
 

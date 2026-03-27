@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Scaffold a new class directory under an engagement root."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -66,6 +67,18 @@ def main() -> int:
 
         # tools/
         (target / "tools").mkdir()
+
+        # .claude/settings.json (write scope enforcement)
+        (target / ".claude").mkdir()
+        settings = {
+            "permissions": {
+                "allow": ["Read", "Write(./**)"],
+                "deny": ["Write(../**)", "Write(./.class.yaml)"],
+            }
+        }
+        with open(target / ".claude" / "settings.json", "w") as f:
+            json.dump(settings, f, indent=2)
+            f.write("\n")
 
         # requirements.txt
         (target / "requirements.txt").write_text("")

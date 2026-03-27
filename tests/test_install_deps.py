@@ -86,6 +86,7 @@ class TestPreconditions:
     def test_exit_1_no_context_root(self, tmp_path):
         result = run_install_deps(tmp_path)
         assert result.returncode == 1
+        assert "No .context-root found" in result.stderr
 
     def test_exit_1_from_arbitrary_nested_dir(self, tmp_path):
         """No .context-root anywhere in the ancestor chain."""
@@ -93,3 +94,4 @@ class TestPreconditions:
         nested.mkdir(parents=True)
         result = run_install_deps(nested)
         assert result.returncode == 1
+        assert "No .context-root found" in result.stderr

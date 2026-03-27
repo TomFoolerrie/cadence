@@ -8,6 +8,8 @@ Spec: init-class.py <name> (run from engagement root)
 - Not idempotent
 """
 
+import json
+
 import pytest
 
 from conftest import make_context_root, read_yaml, run_script
@@ -66,6 +68,33 @@ class TestCreatesClassDirectory:
     def test_tools_directory_exists(self, engagement_root):
         run_script("init-class.py", ["treasury"], cwd=engagement_root)
         assert (engagement_root / "treasury" / "tools").is_dir()
+
+    def test_claude_settings_json_exists(self, engagement_root):
+        run_script("init-class.py", ["treasury"], cwd=engagement_root)
+        assert (engagement_root / "treasury" / ".claude" / "settings.json").is_file()
+
+    def test_claude_settings_json_content(self, engagement_root):
+        run_script("init-class.py", ["treasury"], cwd=engagement_root)
+
+        with open(engagement_root / "treasury" / ".claude" / "settings.json") as f:
+            settings = json.load(f)
+
+        assert settings == {
+            "permissions": {
+                "allow": ["Read", "Write(./**)"],
+                "deny": ["Write(../**)", "Write(./.class.yaml)"],
+            }
+        }
+
+    def test_claude_settings_json_deny_rules(self, engagement_root):
+        run_script("init-class.py", ["treasury"], cwd=engagement_root)
+
+        with open(engagement_root / "treasury" / ".claude" / "settings.json") as f:
+            settings = json.load(f)
+
+        deny = settings["permissions"]["deny"]
+        assert "Write(../**)" in deny
+        assert "Write(./.class.yaml)" in deny
 
 
 # ---------------------------------------------------------------------------

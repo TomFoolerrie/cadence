@@ -218,24 +218,29 @@ class TestPreconditions:
         """Fails when SKILL.md is missing (not in a task directory)."""
         result = run_script("init-period.py", ["2026-03"], cwd=tmp_path)
         assert result.returncode == 1
+        assert "Not in a task directory" in result.stderr
 
     def test_exit_1_status_not_started(self, task_dir):
         """Fails when status is not_started (must be in_progress)."""
         result = run_script("init-period.py", ["2026-03"], cwd=task_dir)
         assert result.returncode == 1
+        assert "Status must be in_progress" in result.stderr
 
     def test_exit_1_status_done(self, task_dir_done):
         """Fails when status is done."""
         result = run_script("init-period.py", ["2026-03"], cwd=task_dir_done)
         assert result.returncode == 1
+        assert "Status must be in_progress" in result.stderr
 
     def test_exit_1_status_blocked(self, task_dir_blocked):
         """Fails when status is blocked."""
         result = run_script("init-period.py", ["2026-03"], cwd=task_dir_blocked)
         assert result.returncode == 1
+        assert "Status must be in_progress" in result.stderr
 
     def test_exit_1_period_dir_already_exists(self, task_dir_in_progress):
         """Fails when period directory already exists."""
         (task_dir_in_progress / "periods" / "2026-03").mkdir(parents=True)
         result = run_script("init-period.py", ["2026-03"], cwd=task_dir_in_progress)
         assert result.returncode == 1
+        assert "already exists" in result.stderr

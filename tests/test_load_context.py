@@ -170,8 +170,10 @@ class TestToolPaths:
         class_tool_pos = stdout.find("parse.py")
         global_tool_pos = stdout.find("format.py")
 
-        if task_tool_pos >= 0 and class_tool_pos >= 0 and global_tool_pos >= 0:
-            assert task_tool_pos < class_tool_pos < global_tool_pos
+        assert task_tool_pos >= 0, "task tool not found in output"
+        assert class_tool_pos >= 0, "class tool not found in output"
+        assert global_tool_pos >= 0, "global tool not found in output"
+        assert task_tool_pos < class_tool_pos < global_tool_pos
 
     def test_tool_name_collision(self, task_dir):
         """Same filename at multiple levels — task-level wins in resolution order."""
@@ -203,8 +205,7 @@ class TestToolPaths:
         """Tool paths section not present at root or class level."""
         result = run_load_context(class_dir, "class")
         assert result.returncode == 0
-        # Tools section should not appear at class level
-        # (exact assertion depends on output format)
+        assert "── tools ──" not in result.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +238,7 @@ class TestPreconditions:
     def test_exit_1_no_context_root(self, tmp_path):
         result = run_load_context(tmp_path, "root")
         assert result.returncode == 1
+        assert "No .context-root found" in result.stderr
 
     def test_exit_1_invalid_context_root_yaml(self, tmp_path):
         """Malformed .context-root exits 1."""
@@ -244,8 +246,17 @@ class TestPreconditions:
         result = run_load_context(tmp_path, "root")
         assert result.returncode == 1
         assert "Traceback" not in result.stderr
+        assert "Invalid .context-root" in result.stderr
 
     def test_exit_1_wrong_level_for_directory(self, engagement_root):
         """--level task from root directory (no SKILL.md) exits 1."""
         result = run_load_context(engagement_root, "task")
         assert result.returncode == 1
+        assert "Not in a class directory" in result.stderr
+
+    def test_exit_1_context_root_missing_engagement_key(self, tmp_path):
+        """Valid YAML .context-root but missing engagement key exits 1."""
+        (tmp_path / ".context-root").write_text("schema_version: 1\n")
+        result = run_load_context(tmp_path, "root")
+        assert result.returncode == 1
+        assert "missing engagement key" in result.stderr.lower()

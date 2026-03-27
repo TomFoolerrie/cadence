@@ -262,6 +262,21 @@ periods/<period>/
 
 **Period string convention:** The period string refers to the **period being closed**, not the current calendar period. For example, period `2026-03` is worked on in April — the March books are closed during the April cycle. This is a domain convention that aligns with how accounting close processes work.
 
+**Period naming formats:** Period format is configurable per task via the `period_format` field in `.class.yaml` (see `02-architecture.md` Section 3, Manifest fields). The default is `monthly`. These formats define the directory names used under each task's `periods/` folder.
+
+| Format | Directory Pattern | Regex (validated by `init-period.py`) | Example Directory |
+|--------|-------------------|---------------------------------------|-------------------|
+| `monthly` | `YYYY-MM` | <code>^[0-9]{4}-(0[1-9]&#124;1[0-2])$</code> | `periods/2026-03/` |
+| `weekly` | `YYYY-WNN` | <code>^[0-9]{4}-W(0[1-9]&#124;[1-4][0-9]&#124;5[0-3])$</code> | `periods/2026-W12/` |
+| `quarterly` | `YYYY-QN` | `^[0-9]{4}-Q[1-4]$` | `periods/2026-Q1/` |
+| `adhoc` | any string | *(no validation)* | `periods/year-end-true-up/` |
+
+`init-period.py` reads the task's `period_format` from the parent class's `.class.yaml` manifest and validates accordingly. If the task is not found in the manifest or `period_format` is omitted, it defaults to `monthly`.
+
+- `status.yaml` stores the current period string in whatever format the task uses.
+- The `/start` skill creates the period directory via `init-period.py` if it doesn't exist.
+- Within a single class, different tasks can use different period formats (e.g., monthly JEs alongside a quarterly reconciliation).
+
 **Validation:** Checks that SKILL.md exists in cwd. Validates the period string against the task's `period_format` from the parent class's `.class.yaml` (defaults to `monthly` / YYYY-MM if not found). Exits with an error if the period directory already exists.
 
 ## 6.6 Automatic Period Reset: `check-periods.py`
@@ -312,6 +327,40 @@ check-periods.py
 
 **What `/status` shows.** `/status` reads the current state — if `check-periods.py` has reset tasks, they show as `not_started` and ready for `/start`. If the anchor hasn't arrived yet, they show as `done` with a "next due" date derived from `done_at` + anchor.
 
+### Anchor Values
+
+The `anchor` field in `.class.yaml` defines **when** a task should be triggered within its period cycle. It is separate from `period_format` (which defines how to **name** the period folder). `anchor` is set during `/onboard` and lives on each task in the manifest.
+
+**Default:** `first_monday` — the first Monday after the period ends. Omitting `anchor` uses this default.
+
+| Pattern | Meaning | Use case |
+|---------|---------|----------|
+| `first_monday` .. `first_friday` | First occurrence of that weekday after the period ends | Monthly/quarterly tasks (e.g., close starts first Monday of the new month) |
+| `last_monday` .. `last_friday` | Last occurrence of that weekday before the period ends | Pre-close tasks (e.g., preliminary reconciliation last Friday of the month) |
+| `monday` .. `sunday` | Every occurrence of that weekday within the period | Weekly tasks (e.g., cash position every Monday) |
+
+**MVP behavior:** `anchor` is **advisory**. The human reads it as a scheduling reminder when `/status` displays the class dashboard. The human still invokes `/start` manually — the anchor tells them *when* they should.
+
+**Future behavior:** The orchestrator reads `anchor` to compute the actual trigger date for automated execution. For `first_monday` with a monthly period ending 2026-03-31, the trigger date is 2026-04-07 (first Monday in April). Holiday handling is a future concern — MVP relies on human judgment.
+
+**`/onboard` sets the anchor.** During the task onboarding interview, the agent asks: "When does this task typically run?" and maps the answer to an anchor value. If the user says "first Monday after month-end" or doesn't have a strong preference, it stays at the default.
+
+**Example `/status` output with anchors:**
+```
+Treasury — March 2026 — Done (3/3 done)
+  ✓ monthly-bank-fees    done  Apr 7    next due: first_monday (May 5)
+  ✓ zba-entries          done  Apr 7    next due: first_monday (May 5)
+  ✓ bank-reconciliation  done  Apr 9    next due: first_wednesday (May 7)
+```
+
+When `check-periods.py` resets tasks (e.g., on May 5):
+```
+Treasury — April 2026 — In Progress (0/3 done)
+  · monthly-bank-fees    not_started   anchor: first_monday
+  · zba-entries          not_started   anchor: first_monday
+  ✓ bank-reconciliation  done          next due: first_wednesday (May 7)
+```
+
 ## 6.7 Script Failure Contracts
 
 All scripts follow consistent failure behavior:
@@ -340,3 +389,93 @@ All scripts follow consistent failure behavior:
 | `archive-period.py` | Yes | Skips if already uploaded (checks Drive for existing folder) |
 
 **Known limitation:** `requirements.txt` files exist at three levels (root, class, task). `install-deps.py` installs top-down (root → class → task). If version conflicts exist between levels, pip's resolution determines the outcome (last install wins). This is a known limitation — in practice, task-level requirements are for niche packages that don't conflict with global ones.
+
+## 6.8 Git Versioning
+
+The hierarchy is initialized as a git repository during scaffolding. The agent commits every structural change automatically — adding tasks, updating procedures, capturing learnings. This gives the hierarchy full version history with zero effort from the user.
+
+### Initialization
+
+During scaffolding, the agent runs:
+
+```
+git init
+git add .context-root AGENT.md .claude/ .gitignore requirements.txt
+git add treasury/ reporting/ ...
+git commit -m "Initial scaffold by accounting plugin"
+```
+
+### .gitignore
+
+```
+# Source data files (too large for git, provided by user/external systems)
+**/periods/*/data/
+
+# Workpapers (generated outputs — archived via Drive when period completes)
+**/periods/*/workpapers/
+
+# Cache and OS
+.context-cache/
+.DS_Store
+```
+
+The structural files — `.context-root`, `.class.yaml`, `AGENT.md`, `status.yaml` (task level), `SKILL.md`, `learned.md`, `tools/` — **are tracked**. Period review notes (feedback that feeds into learned.md) **are tracked**. Source data inputs in `periods/*/data/` **are not tracked** (they come from external systems and may be large). Workpapers in `periods/*/workpapers/` **are not tracked** — they are generated outputs that can be reproduced by re-running the task, and may include large binary files (`.xlsx`, `.pdf`). `archive-period.py` uploads workpapers and data to Google Drive when a period is completed (called by `/done` after commit).
+
+This means the git history captures the *orchestration structure, state, procedures, learnings, and review feedback* — everything needed to reproduce work, without the bulk of generated outputs.
+
+### Automatic Commits
+
+**Skills own commits.** Each skill (`/onboard`, `/start`, `/done`) includes a git commit as its final step. Scripts (`set-status.py`, `init-period.py`, `load-context.py`, `archive-period.py`, etc.) have no git side effects — they modify files, and the calling skill commits the aggregate changes when it completes. This is what makes commits **atomic per skill invocation** — each `/onboard`, `/start`, and `/done` produces exactly one commit, whether the outcome is success or error.
+
+`/done` also calls `archive-period.py` to upload workpapers and data to Google Drive after committing.
+
+### Failure Modes
+
+Two distinct failure modes:
+
+- **Blocked (committed).** The skill ran to completion but the outcome was blocked — e.g., an API returned 401, a validation check failed, a data source was missing. This is a valid, recorded status. The skill sets `status: blocked` in `status.yaml` via `set-status.py` and commits. The commit message includes the reason (see examples below). Blocked states are part of the audit trail.
+- **Partial failure (not committed).** The skill crashed or was interrupted mid-execution — e.g., Claude's session dropped, a script threw an unhandled exception, the user aborted. The skill never reached its commit step, so nothing is committed. The working tree may contain intermediate state; the human can inspect and either retry or reset via `git checkout .`.
+
+### Branch Strategy
+
+**Branch strategy (MVP):** Everything on `main`. Single user, local only — no branching needed. Future multi-user state may introduce per-class or per-period branches.
+
+### Commit Message Format
+
+**Format:** `[skill] task-name period: summary`
+
+```
+/onboard completes:
+  git commit -m "[onboard] monthly-bank-fees: SKILL.md, tools, dry run validated"
+
+/start completes:
+  git commit -m "[start] monthly-bank-fees 2026-03: draft ready for review"
+
+/start fails:
+  git commit -m "[start] monthly-bank-fees 2026-03: blocked — Chase API 401"
+
+/done completes:
+  git commit -m "[done] monthly-bank-fees 2026-03: updated learned.md"
+
+User adds a connection:
+  git commit -m "Add Gmail invoice source to reporting class"
+```
+
+### What This Enables
+
+- **Undo.** "Undo that last change" -> `git revert HEAD`
+- **History.** "What did we change last week?" -> `git log --since="1 week ago"`
+- **Diff.** "How has this SKILL.md evolved?" -> `git log -p -- treasury/monthly-bank-fees/SKILL.md`
+- **Audit trail.** Every execution, every review, every learning is a commit. Full traceability.
+
+### Developer Access
+
+Developers can interact with the git repo directly:
+
+```bash
+cd ~/Documents/Accounting
+git log --oneline
+git diff HEAD~1
+```
+
+The agent treats the git repo as its own — it doesn't expect manual commits. But if a developer hand-edits files, the agent picks up their changes on next session.

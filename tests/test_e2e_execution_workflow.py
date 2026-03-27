@@ -12,35 +12,12 @@ from conftest import (
     make_task,
     read_yaml,
     run_script,
+    start_to_done,
     write_yaml,
 )
 
 
 pytestmark = pytest.mark.e2e
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def start_to_done(task_dir, period):
-    """Run a task through the full start-to-done cycle."""
-    # Start
-    result = run_script("set-status.py", ["in_progress", "--period", period], cwd=task_dir)
-    assert result.returncode == 0
-
-    # Create period
-    result = run_script("init-period.py", [period], cwd=task_dir)
-    assert result.returncode == 0
-
-    # Review ready
-    result = run_script("set-status.py", ["review_ready"], cwd=task_dir)
-    assert result.returncode == 0
-
-    # Done
-    result = run_script("set-status.py", ["done"], cwd=task_dir)
-    assert result.returncode == 0
 
 
 # ---------------------------------------------------------------------------

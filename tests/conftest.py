@@ -8,6 +8,7 @@ Provides:
 - Pre-built fixtures for common test scenarios
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -189,6 +190,13 @@ def make_context_root(
     # .claude/tools/
     (path / ".claude" / "tools").mkdir(parents=True, exist_ok=True)
 
+    # .claude/settings.json
+    import json
+    settings = {"permissions": {"allow": ["Read", "Write(./**)"]}}
+    with open(path / ".claude" / "settings.json", "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
+
     # .gitignore
     (path / ".gitignore").write_text(
         "**/periods/*/data/\n**/periods/*/workpapers/\n.context-cache/\n.DS_Store\n"
@@ -237,6 +245,18 @@ def make_class(
     # tools/
     (class_dir / "tools").mkdir(exist_ok=True)
 
+    # .claude/settings.json
+    (class_dir / ".claude").mkdir(parents=True, exist_ok=True)
+    settings = {
+        "permissions": {
+            "allow": ["Read", "Write(./**)"],
+            "deny": ["Write(../**)", "Write(./.class.yaml)"]
+        }
+    }
+    with open(class_dir / ".claude" / "settings.json", "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
+
     # requirements.txt
     (class_dir / "requirements.txt").write_text("")
 
@@ -264,6 +284,20 @@ def make_task(
     # learned.md
     (task_dir / "learned.md").write_text(LEARNED_MD_TEMPLATE)
 
+    # reference.md
+    reference_content = (
+        f"# reference — {name}\n\n"
+        "## Write Restrictions\n"
+        "- `status.yaml` — Do not edit directly. Use: `python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py <status>`\n"
+        "- Do not create directories with mkdir. Use: `python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>`\n\n"
+        "## Plugin Scripts\n"
+        "| Script | Purpose | Usage |\n"
+        "|--------|---------|-------|\n"
+        "| `set-status.py` | Change task status | `python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py <status>` |\n"
+        "| `init-period.py` | Scaffold a new period directory | `python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>` |\n"
+    )
+    (task_dir / "reference.md").write_text(reference_content)
+
     # status.yaml
     write_yaml(task_dir / "status.yaml", {
         "schema_version": DEFAULT_SCHEMA_VERSION,
@@ -278,6 +312,18 @@ def make_task(
 
     # periods/
     (task_dir / "periods").mkdir(exist_ok=True)
+
+    # .claude/settings.json
+    (task_dir / ".claude").mkdir(parents=True, exist_ok=True)
+    settings = {
+        "permissions": {
+            "allow": ["Read", "Write(./**)"],
+            "deny": ["Write(../**)", "Write(./status.yaml)"]
+        }
+    }
+    with open(task_dir / ".claude" / "settings.json", "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
 
     # requirements.txt
     (task_dir / "requirements.txt").write_text("")
@@ -295,6 +341,26 @@ def make_period(task_path: Path, period: str) -> Path:
     (period_dir / "workpapers").mkdir(parents=True, exist_ok=True)
     (period_dir / "review-notes").mkdir(parents=True, exist_ok=True)
     return period_dir
+
+
+def start_to_done(task_dir, period):
+    """Run a task through the full start-to-done cycle with assertions."""
+    result = run_script("set-status.py", ["in_progress", "--period", period], cwd=task_dir)
+    assert result.returncode == 0
+    result = run_script("init-period.py", [period], cwd=task_dir)
+    assert result.returncode == 0
+    result = run_script("set-status.py", ["review_ready"], cwd=task_dir)
+    assert result.returncode == 0
+    result = run_script("set-status.py", ["done"], cwd=task_dir)
+    assert result.returncode == 0
+
+
+def run_check_periods(cwd, as_of=None):
+    """Run check-periods.py with optional --as-of flag."""
+    args = []
+    if as_of:
+        args.extend(["--as-of", as_of])
+    return run_script("check-periods.py", args, cwd=cwd)
 
 
 # ---------------------------------------------------------------------------

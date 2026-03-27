@@ -21,17 +21,17 @@
 | **SKILL.md** | The operating manual for a task. Describes what to produce, where data comes from, step-by-step procedure, and validation rules. Changes require human approval. |
 | **learned.md** | Accumulated patterns and review history for a task. Agent-managed. Counters are optional metadata. Agent consolidates when the file gets long. |
 | **AGENT.md** | Context file used at both root and class levels. Root-level `AGENT.md` contains entity details (name, fiscal year, materiality, systems). Class-level `AGENT.md` describes what the class covers, key domain concepts, and shared conventions. Consistent naming across levels. Minimal by design — grows organically but stays concise. |
-| **status.yaml** | Task-level execution state. Five fields: `schema_version`, `period`, `status`, `issues`, `done_at`. Two authorized writers: `set-status.py` (agent/skill gateway, validates transitions) and `check-periods.py` (infrastructure scheduler, resets terminal tasks directly). |
-| **review_ready** | A task status indicating the agent completed execution and produced a draft. Awaits human review (MVP) or orchestrator review (future). Transitions: `in_progress → review_ready` (set by `/start`), `review_ready → done` (set by `/done`), `review_ready → in_progress` (human rejects draft, `/start` re-executes). |
+| **status.yaml** | Task-level execution state file. Fields: `schema_version`, `period`, `status`, `issues`, `done_at`. See `03-status-machine.md` for transitions and `05-scripts.md` for the `set-status.py` contract. |
+| **review_ready** | A task status indicating the agent completed execution and produced a draft. See `03-status-machine.md` for transition rules. |
 | **.class.yaml** | Orchestration manifest for a class. Declares tasks, execution order, and enabled status. Read by skills and the orchestrator, not loaded into task agent context. |
 | **Phase** | A group of tasks with the same `order` value in `.class.yaml`. All tasks in phase N must complete before any phase N+1 task starts. Tasks within a phase can run in parallel. |
-| **Blocked** | A task status indicating execution failed. The agent records the reason in `issues[]`. Human investigates and decides to retry or abandon. |
+| **Blocked** | A task status indicating execution failed. Issues recorded in `status.yaml`. See `03-status-machine.md`. |
 | **Terminal state** | `done` or `abandoned`. A task must reach a terminal state before a new period can begin (prior-period guard). |
 | **Anchor** | Day-of-week scheduling field in `.class.yaml` manifest. Defines when a task should trigger within its period cycle (e.g., `first_monday`, `wednesday`). Advisory in MVP; machine-readable for future orchestrator. Default: `first_monday`. |
-| **check-periods.py** | Scheduled infrastructure script that walks the hierarchy and resets terminal tasks whose next anchor date has arrived. Writes `status.yaml` directly (not through `set-status.py`). Reads `done_at` + `anchor` + `period_format` per task. Runs as a cron job (early morning, e.g., 6am — when no agent sessions are active). Idempotent. |
-| **done_at** | Timestamp field in task-level `status.yaml`. Auto-written by `set-status.py` when status reaches `done` or `abandoned`. Used by `check-periods.py` to calculate when the next period is due. |
+| **check-periods.py** | Scheduled infrastructure script that resets terminal tasks when their next anchor date arrives. See `04-scaffolding.md` for behavior details. |
+| **done_at** | Timestamp auto-written by `set-status.py` on terminal states. Used by `check-periods.py` to compute next period. See `04-scaffolding.md`. |
 | **Prior-period guard** | `init-period.py` checks that status is `in_progress` before creating a new period directory. `/start` sets `in_progress` first, then calls `init-period.py`. This ensures the task is actively being worked before scaffolding a new period. |
-| **archive-period.py** | Script called by `/done` after git commit. Uploads completed period's `workpapers/` and `data/` to Google Drive, mirroring the hierarchy structure. |
+| **archive-period.py** | Script called by `/done` after git commit. Uploads completed period data to Google Drive. See `05-scripts.md`. |
 | **Completion Criteria** | Section in `SKILL.md` defining what artifacts must exist for a task to be considered complete. Populated during `/onboard`. Checked by the agent before setting `review_ready`. |
 | **.context-root** | YAML file at the root of an engagement hierarchy. Contains `engagement` (entity name) and `schema_version` fields. Serves as the hierarchy marker. |
 | **Cowork** | The UI application where the user interacts with Claude. Source data is provided via Cowork's file attachment UI. |

@@ -28,10 +28,11 @@ pytestmark = pytest.mark.mid
 
 
 def compute_class_status(class_path):
-    """
-    Compute class-level status from task status.yaml files.
-    Mirrors the spec's derivation rules. This is what the implementation
-    should match.
+    """Reference implementation of class-level status rollup (spec test oracle).
+
+    This function implements the spec's derivation rules (Section 02-three-levels.md).
+    It is defined here as a test oracle — production code should eventually
+    match this behavior. See also: load-context.py --orchestrator.
     """
     class_yaml = read_yaml(class_path / ".class.yaml")
     manifest = class_yaml.get("manifest", [])

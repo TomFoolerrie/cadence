@@ -18,7 +18,10 @@ from conftest import (
     make_context_root,
     make_task,
     read_yaml,
+    run_check_periods,
     run_script,
+    start_to_done,
+    write_yaml,
 )
 
 
@@ -28,13 +31,6 @@ pytestmark = pytest.mark.mid
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def run_check_periods(cwd, as_of=None):
-    args = []
-    if as_of:
-        args.extend(["--as-of", as_of])
-    return run_script("check-periods.py", args, cwd=cwd)
 
 
 def make_done_task(cls, name, period, done_at, period_format="monthly", anchor="first_monday"):
@@ -62,6 +58,8 @@ class TestResets:
 
         result = run_check_periods(root, as_of="2026-05-05")
         assert result.returncode == 0
+        assert "bank-fees" in result.stdout
+        assert "reset" in result.stdout
 
         data = read_yaml(cls / "bank-fees" / "status.yaml")
         assert data["status"] == "not_started"
@@ -78,6 +76,8 @@ class TestResets:
 
         result = run_check_periods(root, as_of="2026-05-05")
         assert result.returncode == 0
+        assert "bank-fees" in result.stdout
+        assert "reset" in result.stdout
 
         data = read_yaml(cls / "bank-fees" / "status.yaml")
         assert data["status"] == "not_started"
@@ -270,11 +270,13 @@ class TestAnchorComputation:
                   done_at="2026-04-06T14:30:00Z")
 
         # April 6 is the first Monday of April — should trigger on or after
-        run_check_periods(root, as_of="2026-04-06")
+        result = run_check_periods(root, as_of="2026-04-06")
+        assert result.returncode == 0
 
-        # Depending on whether anchor is inclusive, this may or may not reset.
-        # The key assertion is that it processes without error.
-        assert True  # Script ran successfully (tested by returncode above)
+        data = read_yaml(cls / "t" / "status.yaml")
+        # Whether reset occurs depends on anchor date math; verify no crash
+        # and status is a valid value
+        assert data["status"] in ("done", "not_started")
 
     def test_first_wednesday_monthly(self, tmp_path):
         """For period 2026-03, first Wednesday of April 2026 is April 1."""
@@ -431,3 +433,76 @@ class TestPreconditions:
     def test_exit_1_not_at_engagement_root(self, tmp_path):
         result = run_check_periods(tmp_path)
         assert result.returncode == 1
+        assert "Not at engagement root" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Git commit behavior
+# ---------------------------------------------------------------------------
+
+
+class TestGitCommit:
+    """check-periods.py commits reset changes when a git repo is present."""
+
+    def _git_init(self, root):
+        """Initialize git repo with config for testing."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(root), capture_output=True)
+        sp.run(["git", "config", "user.email", "test@test.com"], cwd=str(root), capture_output=True)
+        sp.run(["git", "config", "user.name", "Test"], cwd=str(root), capture_output=True)
+        sp.run(["git", "add", "."], cwd=str(root), capture_output=True)
+        sp.run(["git", "commit", "-m", "initial"], cwd=str(root), capture_output=True)
+
+    def test_commit_after_reset(self, tmp_path):
+        """When tasks are reset, check-periods creates a git commit."""
+        import subprocess as sp
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "bank-fees", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "first_monday"},
+        ])
+        make_task(cls, "bank-fees", status="done", period="2026-03",
+                  done_at="2026-04-07T14:30:00Z")
+
+        self._git_init(root)
+
+        result = run_check_periods(root, as_of="2026-05-05")
+        assert result.returncode == 0
+
+        # Verify a new commit was created with the expected message
+        log = sp.run(
+            ["git", "log", "--oneline", "-2"],
+            cwd=str(root), capture_output=True, text=True,
+        )
+        assert "[check]" in log.stdout
+        assert "treasury" in log.stdout
+
+    def test_no_commit_when_no_resets(self, tmp_path):
+        """When no tasks are reset, no git commit is created."""
+        import subprocess as sp
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "bank-fees", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "first_monday"},
+        ])
+        make_task(cls, "bank-fees", status="not_started")
+
+        self._git_init(root)
+
+        # Count commits before
+        before = sp.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            cwd=str(root), capture_output=True, text=True,
+        )
+        before_count = int(before.stdout.strip())
+
+        result = run_check_periods(root, as_of="2026-05-05")
+        assert result.returncode == 0
+
+        # Count commits after — should be the same
+        after = sp.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            cwd=str(root), capture_output=True, text=True,
+        )
+        after_count = int(after.stdout.strip())
+        assert after_count == before_count

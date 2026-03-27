@@ -8,6 +8,8 @@ Spec: init-task.py <name> (run from class directory)
 - Not idempotent
 """
 
+import json
+
 import pytest
 
 from conftest import make_class, make_context_root, read_yaml, run_script
@@ -36,6 +38,30 @@ class TestCreatesTaskDirectory:
         assert (task_dir / "tools").is_dir()
         assert (task_dir / "periods").is_dir()
         assert (task_dir / "requirements.txt").is_file()
+        assert (task_dir / "reference.md").is_file()
+
+    def test_reference_md_contains_task_name(self, class_dir):
+        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
+
+        content = (class_dir / "monthly-bank-fees" / "reference.md").read_text()
+        assert "# reference — monthly-bank-fees" in content
+
+    def test_reference_md_contains_write_restrictions(self, class_dir):
+        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
+
+        content = (class_dir / "monthly-bank-fees" / "reference.md").read_text()
+        assert "## Write Restrictions" in content
+        assert "Do not edit directly" in content
+        assert "Do not create directories with mkdir" in content
+
+    def test_reference_md_contains_plugin_scripts_table(self, class_dir):
+        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
+
+        content = (class_dir / "monthly-bank-fees" / "reference.md").read_text()
+        assert "## Plugin Scripts" in content
+        assert "| Script | Purpose | Usage |" in content
+        assert "set-status.py" in content
+        assert "init-period.py" in content
 
     def test_status_yaml_initial_values(self, class_dir):
         run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
@@ -79,6 +105,33 @@ class TestCreatesTaskDirectory:
 
         content = (class_dir / "monthly-bank-fees" / "requirements.txt").read_text()
         assert content.strip() == ""
+
+    def test_claude_settings_json_exists(self, class_dir):
+        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
+        assert (class_dir / "monthly-bank-fees" / ".claude" / "settings.json").is_file()
+
+    def test_claude_settings_json_content(self, class_dir):
+        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
+
+        with open(class_dir / "monthly-bank-fees" / ".claude" / "settings.json") as f:
+            settings = json.load(f)
+
+        assert settings == {
+            "permissions": {
+                "allow": ["Read", "Write(./**)"],
+                "deny": ["Write(../**)", "Write(./status.yaml)"],
+            }
+        }
+
+    def test_claude_settings_json_deny_rules(self, class_dir):
+        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
+
+        with open(class_dir / "monthly-bank-fees" / ".claude" / "settings.json") as f:
+            settings = json.load(f)
+
+        deny = settings["permissions"]["deny"]
+        assert "Write(../**)" in deny
+        assert "Write(./status.yaml)" in deny
 
 
 # ---------------------------------------------------------------------------

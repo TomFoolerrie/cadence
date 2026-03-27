@@ -10,6 +10,7 @@ Preconditions:
 Exit codes: 0 = success, 1 = precondition failed, 2 = filesystem error
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -49,6 +50,20 @@ version: 0.1.0
 ## Completion Criteria
 
 <!-- What does a completed task look like? What artifacts must exist? -->
+"""
+
+REFERENCE_MD_TEMPLATE = """\
+# reference — {name}
+
+## Write Restrictions
+- `status.yaml` — Do not edit directly. Use: `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/set-status.py <status>`
+- Do not create directories with mkdir. Use: `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/init-period.py <period>`
+
+## Plugin Scripts
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `set-status.py` | Change task status | `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/set-status.py <status>` |
+| `init-period.py` | Scaffold a new period directory | `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/init-period.py <period>` |
 """
 
 LEARNED_MD_TEMPLATE = """\
@@ -116,6 +131,9 @@ def main() -> int:
         # learned.md
         (task_dir / "learned.md").write_text(LEARNED_MD_TEMPLATE)
 
+        # reference.md
+        (task_dir / "reference.md").write_text(REFERENCE_MD_TEMPLATE.format(name=name))
+
         # status.yaml
         status_data = {
             "schema_version": 1,
@@ -132,6 +150,18 @@ def main() -> int:
 
         # periods/
         (task_dir / "periods").mkdir()
+
+        # .claude/settings.json (write scope enforcement)
+        (task_dir / ".claude").mkdir()
+        settings = {
+            "permissions": {
+                "allow": ["Read", "Write(./**)"],
+                "deny": ["Write(../**)", "Write(./status.yaml)"],
+            }
+        }
+        with open(task_dir / ".claude" / "settings.json", "w") as f:
+            json.dump(settings, f, indent=2)
+            f.write("\n")
 
         # requirements.txt
         (task_dir / "requirements.txt").write_text("")
