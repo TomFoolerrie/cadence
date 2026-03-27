@@ -1,4 +1,4 @@
-# Context Engineer
+# Cadence
 
 A plugin for [Claude Cowork](https://claude.ai) that scaffolds and manages a 3-level context hierarchy for recurring professional workflows. It captures human expertise into executable procedures (SKILL.md files) that fresh Claude instances can run each period — so the agent that closes March knows everything the agent that closed February learned.
 
@@ -26,7 +26,7 @@ Context inherits downward: a task agent automatically sees its class and root co
 ## Repository Layout
 
 ```
-context_engineer/
+cadence/
 ├── plugin/                  # The Cowork plugin
 │   ├── .claude-plugin/      #   Plugin manifest (plugin.json)
 │   ├── scripts/             #   8 Python scripts (infrastructure)
@@ -36,7 +36,7 @@ context_engineer/
 ├── notes/                   # Build specs for unimplemented features, dry run findings
 ├── docs/                    # Background research (landscape analysis, design outline)
 ├── engagement-template/     # Starter scaffold for new engagements (used by Cowork)
-├── pyproject.toml           # Project config (context-engineer v0.1.0)
+├── pyproject.toml           # Project config (cadence v0.1.0)
 └── venv/                    # Python virtual environment
 ```
 

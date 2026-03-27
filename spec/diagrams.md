@@ -1,4 +1,4 @@
-# Context Engineer — Mermaid Diagrams
+# Cadence — Mermaid Diagrams
 
 ## 1. Three-Level Hierarchy (System Architecture)
 

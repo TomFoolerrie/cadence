@@ -1,4 +1,4 @@
-# Context Engineer — Project Notes
+# Cadence — Project Notes
 
 Read `README.md` first for project orientation and architecture overview.
 

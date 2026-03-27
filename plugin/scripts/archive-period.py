@@ -87,7 +87,7 @@ def main():
         root / ".google-credentials.json",
         root / "service-account.json",
         cwd / ".google-credentials.json",
-        Path.home() / ".config" / "context-engineer" / "google-credentials.json",
+        Path.home() / ".config" / "cadence" / "google-credentials.json",
     ]
 
     drive_configured = any(p.exists() for p in credential_paths)

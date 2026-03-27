@@ -1,5 +1,5 @@
 [project]
-name = "context-engineer"
+name = "cadence"
 version = "0.1.0"
 description = "Plugin system that scaffolds a managed 3-level context hierarchy"
 requires-python = ">=3.10"

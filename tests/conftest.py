@@ -1,5 +1,5 @@
 """
-Shared fixtures and helpers for Context Engineer tests.
+Shared fixtures and helpers for Cadence tests.
 
 Provides:
 - Builder helpers to construct temporary hierarchy trees (root/class/task)

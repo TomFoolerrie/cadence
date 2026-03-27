@@ -20,3 +20,6 @@ venv/
 
 # Dry run output
 engagement-template-dry-run/
+
+# Notes
+notes/
