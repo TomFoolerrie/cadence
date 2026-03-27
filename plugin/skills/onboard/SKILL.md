@@ -11,6 +11,14 @@ version: 1.0.0
 
 # /onboard
 
+## Constraints
+
+- **Scripts are mandatory.** Never create directories with mkdir or modify YAML files directly.
+  All scaffolding goes through `init-*.py` scripts. All YAML state changes go through
+  `set-status.py` or `edit-class-yaml.py`. The scripts validate inputs and enforce the schema.
+- **Markdown files are the exception.** SKILL.md, learned.md, and AGENT.md are written directly
+  by the agent — these are content files, not state files.
+
 ## Step 0 — Detect Level
 
 Check the current working directory:
@@ -176,85 +184,107 @@ python ${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.py
 
 This installs requirements.txt files top-down (root, class, task).
 
-### Step 8 — First-Period Dry Run
+### Step 8 — Add to Manifest
 
-The first period validates the knowledge transfer. This is the proof that the folder works.
+Add the task to the class manifest **before** the dry run — `init-period.py` needs the task's `period_format` from the manifest to validate the period string.
 
-The period string is the **period being closed** (e.g., if it is April, use `2026-03` for March close). Ask the user which period to use for the dry run.
+Ask the user:
+- *"Should this run in parallel with existing tasks, or does it depend on one finishing first?"* — this determines the `order` value.
+- Confirm the `period_format` and `anchor` from the scheduling discussion in Step 4.
 
-Set status and scaffold the period (substituting the period string):
+Run (substituting values from the interview):
+
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/scripts/edit-class-yaml.py add-task <name> --order <N> --period-format <format> --anchor <anchor>
+```
+
+If the user mentioned a description for the class during the interview, also run:
+
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/scripts/edit-class-yaml.py set-description "<description>"
+```
+
+### Step 9 — First Period Execution
+
+Execute the first period inline to validate the knowledge transfer. This is not a dry run — it produces real output for a real period. You retain full write scope, so if execution reveals a problem with SKILL.md or tools, fix them and re-run while the preparer is still present.
+
+#### 9a — Set Period
+
+Ask the user: *"Which period should we execute? This is the period being closed (e.g., if it's April, use `2026-03` for March close)."*
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py in_progress --period "<period>"
+```
+
+#### 9b — Scaffold Period
+
+```bash
 python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>
 ```
 
-Execute the procedure:
+Creates `periods/{period}/` with `data/`, `workpapers/`, and `review-notes/`.
 
-1. Ask the user to provide the source data for the dry run period (via Cowork file attachment). Place files in `periods/{period}/data/`.
-2. Follow SKILL.md `## Procedure` exactly as a fresh agent would -- this is the test.
-3. Run the tools, produce the output, write results to `periods/{period}/workpapers/`.
-4. Compare your output to what was actually produced for that period. The user should have the original output to compare against.
+#### 9c — Execute
 
-**If the dry run succeeds** (output matches or the user confirms it is correct):
+Follow the `## Procedure` section of SKILL.md:
 
-Set status to review_ready:
+- Ask the user to provide source data files. Place them in `periods/{period}/data/`.
+- All outputs go in `periods/{period}/workpapers/`.
+- Reference tools by path: task `tools/` → class `tools/` → global `.claude/tools/`.
+- Check `## Validation` and `## Completion Criteria` — output must satisfy these before setting `review_ready`.
+- Compare results against `learned.md` patterns (expected ranges, line counts, known quirks).
+
+**If execution fails:**
+
+- **Fixable** (tool bug, SKILL.md gap, missing step): Fix the file, re-run. This is the advantage of executing during onboarding — iterate with the preparer present.
+- **Not fixable** (data unavailable, external system down):
+  ```bash
+  python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py blocked "description of what failed"
+  ```
+  Discuss with the user whether to retry later or continue onboarding without the first period.
+
+#### 9d — Set Review Ready
+
+When execution succeeds and validation passes:
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py review_ready
 ```
 
-Present the output to the user for review:
-- What was prepared
+Report to the user:
+- What was produced
 - Key numbers (totals, line counts, significant amounts)
-- Any items that need attention
-
-Tell the user: *"Dry run complete. Review the output, then run `/done` to capture learnings and finalize."*
-
-**If the dry run fails** (output does not match, tool errors, missing data):
-
-Fix the issue -- update SKILL.md, fix tools, adjust procedure. Re-run. Do not stop until the dry run succeeds. If the issue is unrecoverable for this period (e.g., data is not available):
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py blocked "reason"
-```
-
-Discuss with the user whether to retry with a different period or mark as blocked and continue.
-
-### Step 9 — Add to Manifest
-
-Add the task to the class's `.class.yaml` manifest:
-
-```yaml
-manifest:
-  - task: <name>
-    order: <N>
-    enabled: true
-    period_format: <format>
-    anchor: <anchor>
-```
-
-Ask the user:
-- *"Should this run in parallel with existing tasks, or does it depend on one finishing first?"* -- this determines the `order` value.
-- Confirm the `period_format` and `anchor` from the scheduling discussion in Step 4.
+- How results compare to learned.md patterns
+- *"First period complete. Review the output, then run `/done` to capture learnings and finalize."*
 
 ### Step 10 — Finalize
 
-Stage and commit:
-
 ```bash
 git add <task-directory>/ <class>/.class.yaml
-git commit -m "[onboard] <task-name>: SKILL.md, tools, dry run ready for review"
 ```
 
-Tell the user: *"Task onboarded. Review the dry run output and run `/done` to complete the first period. From the next period onward, use `/start`."*
+**If `review_ready`:**
+
+```bash
+git commit -m "[onboard] <task-name>: SKILL.md, tools, first period ready for review"
+```
+
+Tell the user: *"Task onboarded. Review the output and run `/done` to capture learnings and finalize. From the next period onward, use `/start`."*
+
+**If `blocked`:**
+
+```bash
+git commit -m "[onboard] <task-name>: SKILL.md, tools ready; first period blocked"
+```
+
+Tell the user: *"Task onboarded. SKILL.md and tools are committed. Run `/start` when the blocker is resolved to execute the first period."*
 
 ---
 
 ## Key Constraints
 
-- **/onboard stops at review_ready.** The onboarding commit covers scaffolding, interview artifacts, and the dry run output. It does not set `done` or capture learnings -- that is `/done`'s job.
-- **/done completes the first period.** After the user reviews the dry run, they run `/done` in the same conversation. `/done` captures review feedback, seeds learned.md, sets `done`, commits, and archives.
-- **First period is part of onboarding.** `/start` is only used from the second period onward. The dry run validates the folder works end-to-end.
+- **/onboard stops at review_ready.** The onboarding commit covers scaffolding, interview artifacts, and the first period output. It does not set `done` or capture learnings -- that is `/done`'s job.
+- **First period execution is inline.** Onboard executes the first period directly -- it does not delegate to `/start`. This keeps full write scope active so you can iterate on SKILL.md and tools if execution reveals problems. `/start` is used for all subsequent periods.
+- **/done completes the first period.** After the user reviews the output, they run `/done` in the same conversation. `/done` captures review feedback, seeds learned.md, sets `done`, commits, and archives.
 - **AGENT.md stays minimal.** Class-level AGENT.md should be concise. If information is specific to one task, it belongs in that task's SKILL.md.
 - **Token cost awareness.** SKILL.md and learned.md are loaded every period. Keep them focused. Do not duplicate information between sections or between files.

@@ -25,6 +25,13 @@ The goal of task-level onboarding is to produce a self-contained work folder tha
 
 ---
 
+## Constraints
+
+- **Scripts are mandatory.** Never create directories with mkdir or modify YAML files directly. All scaffolding goes through `init-*.py` scripts. All YAML state changes go through `set-status.py` or `edit-class-yaml.py`. The scripts validate inputs and enforce the schema.
+- **Markdown files are the exception.** SKILL.md, learned.md, and AGENT.md are written directly by the agent — these are content files, not state files.
+
+---
+
 ## Class-Level Onboarding (from root)
 
 Run when the user wants to create a new class of work (e.g., "I want to set up treasury work").
@@ -160,83 +167,106 @@ install-deps.py
 
 Installs requirements.txt files top-down (root → class → task).
 
-#### Step 7 — First Period Execution (Dry Run)
+#### Step 7 — Add to Manifest
 
-The first period is executed as part of onboarding to validate the knowledge transfer. This is the proof that the folder works.
-
-The period string is the **period being closed** (e.g., if it's April, use `2026-03` for March close). Ask the user which period to use for the dry run.
-
-```bash
-set-status.py in_progress --period "<period>"
-init-period.py <period>
-```
-
-**Execute the procedure:**
-
-1. Ask the user to provide the source data for the dry run period (via Cowork file attachment). Place files in `periods/{period}/data/`.
-2. Follow SKILL.md `## Procedure` exactly as a fresh agent would — this is the test.
-3. Run the tools, produce the output, write results to `periods/{period}/workpapers/`.
-4. Compare your output to what was actually produced for that period. The user should have the original output to compare against.
-
-**If the dry run succeeds** (output matches or the user confirms it's correct):
-
-```bash
-set-status.py review_ready
-```
-
-Present the output to the user for review:
-- What was prepared
-- Key numbers (totals, line counts, significant amounts)
-- Any items that need attention
-
-Tell the user: *"Dry run complete. Review the output, then run `/done` to capture learnings and finalize."*
-
-`/done` handles the rest: captures review feedback, seeds `learned.md`, sets `done`, commits, and archives to Google Drive.
-
-**If the dry run fails** (output doesn't match, tool errors, missing data):
-
-Fix the issue — update SKILL.md, fix tools, adjust procedure. Re-run. You are not done until the dry run succeeds. If the issue is unrecoverable for this period (e.g., data is simply not available):
-
-```bash
-set-status.py blocked "reason"
-```
-
-Discuss with the user whether to retry with a different period or mark as blocked and continue.
-
-#### Step 8 — Add to Manifest
-
-Add the task to the class's `.class.yaml` manifest:
-
-```yaml
-manifest:
-  # ... existing tasks ...
-  - task: <name>
-    order: <N>           # ask user or infer from dependencies
-    enabled: true
-    period_format: <format>   # from interview (default: monthly)
-    anchor: <anchor>          # from interview (default: first_monday)
-```
+Add the task to the class's `.class.yaml` manifest using `edit-class-yaml.py`. This must happen **before** the dry run so that `init-period.py` can read the task's `period_format` from the manifest.
 
 Ask the user:
 - *"Should this run in parallel with existing tasks, or does it depend on one finishing first?"* → determines `order` value
 - Confirm the `period_format` and `anchor` from the scheduling discussion in Step 3.
 
+```bash
+edit-class-yaml.py add-task <name> --order <N> --enabled --period-format <format> --anchor <anchor>
+```
+
+If the class description is still empty (new class), also set it:
+
+```bash
+edit-class-yaml.py set-description "<description from Step 3 interview>"
+```
+
+#### Step 8 — First Period Execution
+
+Execute the first period inline to validate the knowledge transfer. This is not a dry run — it produces real output for a real period. Because onboard retains full write scope, if execution reveals a problem with SKILL.md or tools, fix them and re-run while the preparer is still present.
+
+##### 8a — Set Period
+
+Ask the user: *"Which period should we execute? This is the period being closed (e.g., if it's April, use `2026-03` for March close)."*
+
+```bash
+set-status.py in_progress --period "<period>"
+```
+
+##### 8b — Scaffold Period
+
+```bash
+init-period.py <period>
+```
+
+Creates `periods/{period}/` with `data/`, `workpapers/`, and `review-notes/`.
+
+##### 8c — Execute
+
+Follow the `## Procedure` section of SKILL.md:
+
+- Ask the user to provide source data files. Place them in `periods/{period}/data/`.
+- All outputs go in `periods/{period}/workpapers/`.
+- Reference tools by path: task `tools/` → class `tools/` → global `.claude/tools/`.
+- Check `## Validation` and `## Completion Criteria` — output must satisfy these before setting `review_ready`.
+- Compare results against `learned.md` patterns (expected ranges, line counts, known quirks).
+
+**If execution fails:**
+
+- **Fixable** (tool bug, SKILL.md gap, missing step): Fix the file, re-run. This is the advantage of executing during onboarding — iterate with the preparer present.
+- **Not fixable** (data unavailable, external system down):
+  ```bash
+  set-status.py blocked "description of what failed"
+  ```
+  Discuss with the user whether to retry later or continue onboarding without the first period.
+
+##### 8d — Set Review Ready
+
+When execution succeeds and validation passes:
+
+```bash
+set-status.py review_ready
+```
+
+Report to the user:
+- What was produced
+- Key numbers (totals, line counts, significant amounts)
+- How results compare to learned.md patterns
+- *"First period complete. Review the output, then run `/done` to capture learnings and finalize."*
+
 #### Step 9 — Finalize
 
 ```bash
 git add <task-directory>/ <class>/.class.yaml
-git commit -m "[onboard] <task-name>: SKILL.md, tools, dry run ready for review"
 ```
 
-Tell the user: *"Task onboarded. Review the dry run output and run `/done` to complete the first period. From the next period onward, use `/start`."*
+**If `review_ready`:**
+
+```bash
+git commit -m "[onboard] <task-name>: SKILL.md, tools, first period ready for review"
+```
+
+Tell the user: *"Task onboarded. Review the output and run `/done` to capture learnings and finalize. From the next period onward, use `/start`."*
+
+**If `blocked`:**
+
+```bash
+git commit -m "[onboard] <task-name>: SKILL.md, tools ready; first period blocked"
+```
+
+Tell the user: *"Task onboarded. SKILL.md and tools are committed. Run `/start` when the blocker is resolved to execute the first period."*
 
 ---
 
 ## Key Constraints
 
-- **`/onboard` stops at `review_ready`.** The onboarding commit covers scaffolding, interview artifacts, and the dry run output. It does not set `done` or capture learnings — that's `/done`'s job.
-- **`/done` completes the first period.** After the user reviews the dry run, they run `/done` in the same conversation. `/done` captures review feedback, seeds `learned.md`, sets `done`, commits, and archives to Google Drive. This is the same `/done` flow used for every subsequent period.
-- **First period is part of onboarding.** `/start` is only used from the second period onward. The dry run validates that the folder works end-to-end.
+- **First period execution is inline.** Onboard executes the first period directly — it does not delegate to `/start`. This keeps onboard's full write scope active so it can iterate on SKILL.md and tools if execution reveals problems. `/start` is used for all subsequent periods.
+- **`/done` completes the first period.** After the user reviews the output, they run `/done` in the same conversation. `/done` captures review feedback, seeds `learned.md`, sets `done`, commits, and archives. This is the same `/done` flow used for every subsequent period.
+- **Scripts gate all YAML mutations.** The agent never directly edits `.class.yaml` or `status.yaml`. Use `edit-class-yaml.py` for manifest changes and `set-status.py` for status transitions.
 - **AGENT.md stays minimal.** Class-level AGENT.md should be concise. If information is specific to one task, it belongs in that task's SKILL.md.
 - **Token cost awareness.** SKILL.md and learned.md are loaded every period. Keep them focused. Avoid duplicating information between sections or between files.
 
@@ -251,5 +281,7 @@ Tell the user: *"Task onboarded. Review the dry run output and run `/done` to co
 | `init-class.py <name>` | Class onboarding, Step 2 | Scaffold class directory |
 | `init-task.py <name>` | Task onboarding, Step 2 | Scaffold task folder |
 | `install-deps.py` | Task onboarding, Step 6 | Install Python dependencies |
-| `set-status.py <status>` | Task onboarding, Step 7 | Transition task status (`in_progress`, `review_ready`, or `blocked`) |
-| `init-period.py <period>` | Task onboarding, Step 7 | Scaffold period directory |
+| `edit-class-yaml.py` | Task onboarding, Step 7 | Add task to manifest, set class description |
+| `set-status.py in_progress --period` | Task onboarding, Step 8a | Set period for first period execution |
+| `init-period.py <period>` | Task onboarding, Step 8b | Scaffold first period directory |
+| `set-status.py review_ready` | Task onboarding, Step 8d | Mark first period ready for review |

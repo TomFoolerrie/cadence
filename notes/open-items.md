@@ -9,7 +9,7 @@ Priorities revised after post-dry-run review (2026-03-26).
 | 1 | Build `init-engagement.py` with git init | Critical | Blocks every skill path. No fallback — fail loud if missing. |
 | 2 | Build `edit-class-yaml.py` with enum validation | Critical | Also closes Item 8 (empty description) via `set-description`. |
 | 3 | Auto-generate `.claude/settings.json` (write scope) in `init-class.py` and `init-task.py` | Critical | The architectural fix. Instructions failed; permissions won't. |
-| 5 | Refactor onboard SKILL.md Step 8 to invoke `/start` instead of reimplementing it | Critical | **Promoted from Medium.** Highest-value simplification — prevents the entire class of "agent bypasses scripts during onboard" problems. Verify `/start` handles first-period case (empty period in status.yaml). |
+| 5 | ~~Refactor onboard first-period execution~~ | Done | **Resolved differently than originally planned.** Instead of delegating to `/start`, first period execution is now inline in onboard with proper sub-steps (8a-8d). Rationale: onboard needs full write scope to iterate on SKILL.md/tools if execution reveals problems; `/start` is a prompt injection (not a sub-agent) so delegation caused mode-switching issues. Script gating (Items 1-3) solved the "agent bypasses scripts" problem directly. |
 | 6 | Update onboard SKILL.md Step 9 to use `edit-class-yaml.py` | Medium | Blocked by Item 2. Natural pairing. |
 | 4 | Auto-generate `reference.md` (plugin scripts + write restrictions only) in `init-task.py` | Low | **Demoted from Medium.** `load-context.py` already outputs tool paths. Nice-to-have, not load-bearing. Drop "Task-Specific Tools" section from template. |
 | 7 | Add "scripts are mandatory" constraint block to onboard SKILL.md | Low | **Demoted from Medium.** Write scope (Item 3) is the real enforcement. This is documentation/belt-and-suspenders, not the primary defense. |
@@ -27,7 +27,7 @@ The dry run surfaced exactly the right class of failure — agent bypassing infr
 The three critical fixes form a triangle:
 1. **Write scope enforcement** — hard permission boundaries that prevent direct YAML/directory manipulation
 2. **Script gating of all YAML state** — `edit-class-yaml.py` closes the last unguarded mutation path
-3. **Delegate onboard dry run to `/start`** — eliminates the mode-switching problem entirely
+3. **Inline first-period execution with script guardrails** — onboard executes the first period directly (not via `/start`) but all YAML mutations go through scripts. Write scope + script gating solve mode-switching; `/start` delegation proved unnecessary once the hard boundaries were in place.
 
 ### Key Insight
 
