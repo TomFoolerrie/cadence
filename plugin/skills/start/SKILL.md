@@ -68,101 +68,34 @@ git commit -m "[start] <task-name> <period>: abandoned — <reason>"
 
 Do not continue to Step 1.
 
-## Step 1 — Set In Progress
+## Step 1 — Setup
 
 Determine the period string. The period is the **period being closed**, not the current calendar period (e.g., if today is April, the period for a monthly task is `2026-03`).
 
-**If `status.yaml` already has a non-empty `period` field** (normal case — set by `check-periods.py` on reset, or crash recovery / rejected draft):
+- If `status.yaml` already has a non-empty `period` field (normal case — set by `check-periods.py` on reset, or crash recovery / rejected draft): no `--period` needed.
+- If `period` is empty AND `period_format` is `adhoc`: ask the user for the period string.
+- If `period` is empty AND `period_format` is not `adhoc`: compute the period being closed from the current date:
+  - `monthly` — use the previous month (e.g., if today is 2026-04-07, period is `2026-03`)
+  - `quarterly` — use the previous quarter (e.g., if today is 2026-04-07, period is `2026-Q1`)
+  - `weekly` — use the previous week
+
+Then run the setup wrapper:
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py in_progress
+python ${CLAUDE_PLUGIN_ROOT}/scripts/start-setup.py [--period "<period>"]
 ```
 
-**If `period` is empty AND `period_format` is `adhoc`:**
+This runs four scripts atomically: sets status to `in_progress`, installs dependencies, scaffolds the period directory (if needed), and loads the full context chain. On success, context is printed to stdout.
 
-Ask the user for the period string. Then run:
+- **Exit 0:** Setup complete. Proceed to Step 2.
+- **Exit 1:** Precondition error (invalid transition, no period). Report to user, stop.
+- **Exit 2:** Script failure. Task is already set to `blocked`. Commit and stop:
+  ```bash
+  git add .
+  git commit -m "[start] <task-name> <period>: blocked — setup failed"
+  ```
 
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py in_progress --period "<period>"
-```
-
-**If `period` is empty AND `period_format` is not `adhoc`:**
-
-Compute the period being closed from the current date:
-
-- `monthly` — use the previous month (e.g., if today is 2026-04-07, period is `2026-03`)
-- `quarterly` — use the previous quarter (e.g., if today is 2026-04-07, period is `2026-Q1`)
-- `weekly` — use the previous week
-
-Then run:
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py in_progress --period "<period>"
-```
-
-This step is idempotent. If the task is already `in_progress` (crash recovery) or transitioning from `review_ready` (rejected draft), `set-status.py` succeeds without error.
-
-## Step 2 — Install Dependencies
-
-Run:
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.py
-```
-
-This installs `requirements.txt` files top-down (root, class, task).
-
-If `install-deps.py` exits with code 2, run:
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py blocked "<error details from install-deps.py>"
-```
-
-Then commit and stop:
-
-```bash
-git add .
-git commit -m "[start] <task-name> <period>: blocked — dependency install failed"
-```
-
-## Step 3 — Setup Period
-
-Check whether the period directory `periods/<period>/` already exists.
-
-**If it does not exist**, scaffold it (substituting the period string):
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>
-```
-
-This creates `periods/<period>/` with `data/`, `workpapers/`, and `review-notes/` subdirectories.
-
-**If it already exists** (crash recovery, re-execution after rejection), skip this step.
-
-## Step 4 — Load Context
-
-Run:
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/load-context.py --level task
-```
-
-This loads the full context chain: root `AGENT.md`, class `AGENT.md`, task `SKILL.md`, `learned.md`, and `status.yaml`. Use the output for execution in the next step.
-
-If `load-context.py` exits with code 1, run:
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py blocked "<error details from load-context.py>"
-```
-
-Then commit and stop:
-
-```bash
-git add .
-git commit -m "[start] <task-name> <period>: blocked — context load failed"
-```
-
-## Step 5 — Execute
+## Step 2 — Execute
 
 Read `SKILL.md` and `learned.md` from the loaded context.
 
@@ -179,7 +112,7 @@ Key rules during execution:
 
 If you need source data from the user, ask them to provide it via Cowork file attachment. Place received files in `data/`.
 
-## Step 6 — Handle Outcome
+## Step 3 — Handle Outcome
 
 ### Success Path
 
@@ -197,7 +130,7 @@ Report to the user:
 - Any items that need attention.
 - End with: *"Ready for your review. Run `/done` when you've reviewed the output."*
 
-Then proceed to Step 7.
+Then proceed to Step 4.
 
 ### Failure Path
 
@@ -220,9 +153,9 @@ git add .
 git commit -m "[start] <task-name> <period>: blocked — <reason>"
 ```
 
-Do not proceed to Step 7.
+Do not proceed to Step 4.
 
-## Step 7 — Git Commit (Success Path)
+## Step 4 — Git Commit (Success Path)
 
 Commit all work for the period:
 
@@ -235,13 +168,13 @@ The user reviews the draft and then runs `/done` in this same conversation.
 
 ## Edge Cases
 
-- **Period directory already exists:** Skip `init-period.py`. Resume execution with existing data.
-- **`in_progress` from a crashed session:** `set-status.py in_progress` is a no-op. Resume execution from where context loads.
-- **`review_ready` and human rejects:** `set-status.py in_progress` clears issues. Re-execute from Step 5.
+- **Period directory already exists:** `start-setup.py` skips `init-period.py`. Resume execution with existing data.
+- **`in_progress` from a crashed session:** `start-setup.py` is idempotent. Resume execution.
+- **`review_ready` and human rejects:** `start-setup.py` transitions to `in_progress`. Re-execute from Step 2.
 - **`done` or `abandoned`:** Inform the user the task is already terminal for this period. Stop without modifying state.
 - **Source data not yet available:** Ask the user to provide it. If they cannot, set `blocked` with details.
 - **Tool fails mid-execution:** Report the error and set `blocked` with details.
-- **`adhoc` period format:** Ask the user for the period string instead of computing it.
+- **`adhoc` period format:** Ask the user for the period string, pass to `start-setup.py --period`.
 
 ## Constraints
 
