@@ -4,24 +4,63 @@ A plugin for [Claude Cowork](https://claude.ai) that scaffolds and manages a 3-l
 
 ## Architecture
 
-The plugin manages **engagement hierarchies** — folder structures that live outside this repo, on the user's filesystem. Each hierarchy has exactly three levels:
+The plugin manages **engagement hierarchies** — folder structures that live outside this repo, on the user's filesystem. Each hierarchy has exactly three levels deep (no nesting beyond root → class → task):
 
 ```
-engagement-root/          # Root — entity context (.context-root, AGENT.md)
-├── treasury/             # Class — a category of recurring work (.class.yaml)
-│   ├── bank-fees/        # Task — one repeatable unit (SKILL.md, status.yaml)
-│   │   ├── periods/      #   Period-organized work (2026-03/, 2026-04/, ...)
-│   │   ├── learned.md    #   Patterns from past executions
-│   │   └── tools/        #   Task-specific scripts
-│   └── statement-norm/
-└── reporting/
+engagement-root/                # Root — entity context
+├── .context-root               #   Root marker (YAML: engagement name, schema version)
+├── AGENT.md                    #   Entity details (legal name, fiscal year, materiality, contacts)
+├── requirements.txt            #   Global dependencies
+├── .claude/tools/              #   Global shared tools (JE formatter, PDF parser)
+├── treasury/                   # Class — a category of recurring work
+│   ├── .class.yaml             #   Orchestration manifest (tasks, order, period format)
+│   ├── AGENT.md                #   Class context for task agents
+│   ├── tools/                  #   Class-level shared tools
+│   └── monthly-bank-fees/      # Task — one repeatable unit
+│       ├── SKILL.md            #   The procedure (what to do, step by step)
+│       ├── learned.md          #   Patterns from past executions
+│       ├── status.yaml         #   Current execution state
+│       ├── reference.md        #   Write restrictions + script docs
+│       ├── tools/              #   Task-specific scripts
+│       └── periods/            #   Period-organized work
+│           └── 2026-03/
+│               ├── data/       #   Inputs
+│               ├── workpapers/ #   Outputs
+│               └── review-notes/
+└── reporting/                  # Another class
 ```
 
-- **Root** — entity details (legal name, fiscal year, materiality, contacts)
-- **Class** — a group of related tasks with a manifest (`.class.yaml`) defining execution order
-- **Task** — a single repeatable procedure with its own SKILL.md, status tracking, and learning record
+### Levels
 
-Context inherits downward: a task agent automatically sees its class and root context.
+- **Root** — engagement-wide context: entity details, materiality thresholds, system access, key contacts. The user rarely interacts here after initial setup.
+- **Class** — groups related tasks (treasury, reporting, collections). `.class.yaml` declares the task manifest with execution phases — tasks at the same `order` value run in parallel, all must complete before the next phase starts. `AGENT.md` provides class context that flows down to task agents.
+- **Task** — where the user lives. Each task is self-contained: `SKILL.md` (procedure), `learned.md` (accumulated learnings), `status.yaml` (execution state), `tools/` (automation scripts), and `periods/` (period-organized work).
+
+### Context Inheritance
+
+Context flows downward: a task agent automatically sees root `AGENT.md` → class `AGENT.md` → task files. `load-context.py` assembles this chain. Tools resolve task → class → global (most specific wins).
+
+### Status Machine
+
+Tasks follow a strict state machine enforced by `set-status.py`:
+
+```
+not_started → in_progress → review_ready → done
+                  ↑              │
+                  └──────────────┘  (rejection — re-execute)
+              in_progress → blocked → not_started (retry)
+                                    → abandoned   (give up)
+done/abandoned → not_started  (check-periods.py — next period due)
+```
+
+Class status is always derived on the fly from task statuses — never stored.
+
+### Design Principles
+
+- **The folder is the memory, not the agent.** Each execution gets a fresh Claude instance. Nothing carries over except what's written to the folder.
+- **Hard boundaries over instructions.** Write scope enforcement (`.claude/settings.json`) prevents agents from bypassing scripts. Scripts gate all YAML mutations.
+- **The hierarchy belongs to the user.** It's folders and markdown on a filesystem. Uninstalling the plugin doesn't delete their data. Any runtime that can parse YAML and run Python can execute it.
+- **Git-versioned.** Every change is committed automatically. Full undo history.
 
 ## Repository Layout
 
@@ -29,10 +68,10 @@ Context inherits downward: a task agent automatically sees its class and root co
 cadence/
 ├── plugin/                  # The Cowork plugin
 │   ├── .claude-plugin/      #   Plugin manifest (plugin.json)
-│   ├── scripts/             #   8 Python scripts (infrastructure)
+│   ├── scripts/             #   11 Python scripts (infrastructure)
 │   └── skills/              #   4 skill definitions (SKILL.md files)
 ├── spec/                    # Design specification (source of truth)
-├── tests/                   # 174 unit + e2e tests
+├── tests/                   # 265 unit + e2e tests
 ├── notes/                   # Build specs for unimplemented features, dry run findings
 ├── docs/                    # Background research (landscape analysis, design outline)
 ├── engagement-template/     # Starter scaffold for new engagements (used by Cowork)
@@ -44,27 +83,30 @@ cadence/
 
 ### Skills (invoked by the user in Cowork)
 
-| Skill | Purpose |
-|-------|---------|
-| `/onboard` | Knowledge transfer — interviews the human, creates SKILL.md, runs first period |
-| `/start` | Executes a task for the current period |
-| `/done` | Captures review feedback, updates learned.md, closes the period |
-| `/status` | Read-only dashboard showing class progress |
+| Skill | Run from | Purpose |
+|-------|----------|---------|
+| `/onboard` | Root or class dir | Knowledge transfer — interviews the human, scaffolds class/task, creates SKILL.md and tools, runs first period to `review_ready` |
+| `/start` | Task dir | Executes a task for the current period. Handles first run, retry from `blocked`, and re-execution after rejection. Sets `review_ready` on success, `blocked` on failure |
+| `/done` | Task dir (same conversation as `/start`) | Captures review feedback, updates learned.md, proposes SKILL.md changes (human-approved), sets `done`, archives to Google Drive |
+| `/status` | Class dir | Read-only dashboard — reads all task `status.yaml` files, computes class rollup on the fly |
 
 ### Scripts (called by skills, enforce validation)
 
 | Script | Purpose |
 |--------|---------|
-| `init-class.py` | Scaffold a new class directory |
-| `init-task.py` | Scaffold a new task directory |
+| `init-engagement.py` | Scaffold a new engagement root with git init |
+| `init-class.py` | Scaffold a new class directory (generates `.claude/settings.json`) |
+| `init-task.py` | Scaffold a new task directory (generates `.claude/settings.json`) |
 | `init-period.py` | Scaffold a period directory (data/, workpapers/, review-notes/) |
+| `edit-class-yaml.py` | Gateway for `.class.yaml` mutations (enum-validated) |
 | `load-context.py` | Assemble context from the hierarchy (pure read, no side effects) |
 | `set-status.py` | Validate and apply status transitions |
+| `start-setup.py` | Atomic setup phase for `/start` (status + deps + period + context) |
 | `install-deps.py` | Install requirements.txt files top-down through hierarchy |
 | `check-periods.py` | Scheduled reset of completed tasks when next anchor date arrives |
 | `archive-period.py` | Upload completed period to Google Drive |
 
-All scripts follow the exit-code contract in `spec/script-contracts.md`: exit 0 = success, exit 1 = validation error, exit 2 = system error. Non-zero exit guarantees no side effects.
+All scripts follow the exit-code contract (see `spec/05-scripts.md`): exit 0 = success, exit 1 = validation error, exit 2 = system error. Non-zero exit guarantees no side effects.
 
 ## Running Tests
 
@@ -73,10 +115,11 @@ source venv/bin/activate
 python -m pytest tests/
 ```
 
-174 tests (unit + e2e). Markers: `@pytest.mark.mid` for component tests, `@pytest.mark.e2e` for workflow tests.
+265 tests (unit + e2e). Markers: `@pytest.mark.mid` for component tests, `@pytest.mark.e2e` for workflow tests.
 
 ## Current Status
 
-- **v0.1.0** — All 8 scripts implemented and tested. 4 skill definitions written.
+- **v0.1.0** — All 11 scripts implemented and tested. 4 skill definitions written.
 - **First dry run** completed 2026-03-25 on Cowork. Validated the core flow (`/onboard` → `/start` → `/done`) but surfaced critical issues around agent script bypass.
-- **Next** — See `notes/open-items.md` for the priority queue. Critical items: `init-engagement.py` (git init), `edit-class-yaml.py` (enum validation), write scope enforcement (`.claude/settings.json` generation).
+- **Post-dry-run fixes** — All three critical items resolved: `init-engagement.py` (git init), `edit-class-yaml.py` (enum-validated YAML gateway), write scope enforcement (`.claude/settings.json` auto-generated by scaffolding scripts).
+- **Next** — See `notes/open-items.md` for the priority queue.
