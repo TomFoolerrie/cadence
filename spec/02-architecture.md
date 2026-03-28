@@ -7,6 +7,7 @@ engagement-root/                    <- ROOT
 ├── .context-root                   <- root marker (YAML: engagement name, schema version)
 ├── AGENT.md                        <- root context (entity details)
 ├── requirements.txt                <- global dependencies
+├── venv/                           <- Python virtual environment (created by init-venv.py)
 ├── .claude/
 │   └── tools/                      <- global shared tools
 ├── treasury/                       <- CLASS
@@ -51,6 +52,7 @@ The root is the engagement folder -- the top-level directory the user mounts in 
 | `requirements.txt` | Global Python dependencies shared across all classes and tasks. |
 | `.claude/tools/` | Global shared tools (e.g., JE formatter, PDF parser) available to all tasks. |
 | `.gitignore` | What git tracks vs. ignores. |
+| `venv/` | Python virtual environment for the engagement. Created by `init-venv.py`. All dependencies are installed here via `install-deps.py`. |
 
 The user rarely interacts at the root level after initial setup. The root is context, not a workspace.
 

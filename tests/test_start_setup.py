@@ -14,6 +14,7 @@ from conftest import (
     make_context_root,
     make_period,
     make_task,
+    make_venv,
     read_yaml,
     run_script,
 )
@@ -41,6 +42,7 @@ def run_setup(cwd, period=None):
 class TestHappyPath:
     def test_not_started_with_period_arg(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(cls, "monthly-bank-fees")
 
@@ -53,6 +55,7 @@ class TestHappyPath:
 
     def test_not_started_with_period_in_status(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(cls, "monthly-bank-fees", period="2026-03")
 
@@ -65,6 +68,7 @@ class TestHappyPath:
 
     def test_period_arg_ignored_when_status_has_period(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(cls, "monthly-bank-fees", period="2026-03")
 
@@ -76,6 +80,7 @@ class TestHappyPath:
 
     def test_crash_recovery_in_progress(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(
             cls, "monthly-bank-fees", status="in_progress", period="2026-03"
@@ -91,6 +96,7 @@ class TestHappyPath:
 
     def test_review_ready_reentry(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(
             cls, "monthly-bank-fees", status="review_ready", period="2026-03"
@@ -113,6 +119,7 @@ class TestHappyPath:
 class TestPeriodDir:
     def test_creates_period_dir(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(cls, "monthly-bank-fees")
 
@@ -125,6 +132,7 @@ class TestPeriodDir:
 
     def test_skips_existing_period_dir(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(
             cls, "monthly-bank-fees", status="in_progress", period="2026-03"
@@ -144,6 +152,7 @@ class TestPeriodDir:
 class TestContextOutput:
     def test_stdout_contains_context_sections(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(cls, "monthly-bank-fees")
 
@@ -224,11 +233,16 @@ class TestPreconditionEdgeCases:
 class TestBlockedOnFailure:
     def test_install_deps_failure_sets_blocked(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(cls, "monthly-bank-fees")
 
         # Write invalid requirements to trigger pip failure
         (task / "requirements.txt").write_text("===invalid===\n")
+        # Replace mock pip with one that fails on invalid input
+        pip_path = root / "venv" / "bin" / "pip"
+        pip_path.write_text("#!/bin/sh\nexit 1\n")
+        pip_path.chmod(0o755)
 
         result = run_setup(task, period="2026-03")
         assert result.returncode == 2
@@ -254,6 +268,7 @@ class TestBlockedOnFailure:
 
     def test_init_period_failure_sets_blocked(self, tmp_path):
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(cls, "monthly-bank-fees")
 

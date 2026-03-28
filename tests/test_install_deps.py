@@ -14,6 +14,7 @@ from conftest import (
     make_class,
     make_context_root,
     make_task,
+    make_venv,
     run_script,
 )
 
@@ -38,33 +39,47 @@ def run_install_deps(cwd):
 class TestInstallDeps:
     """install-deps.py finds context root and installs dependencies."""
 
-    def test_finds_context_root_from_task_level(self, task_dir):
-        result = run_install_deps(task_dir)
+    def test_finds_context_root_from_task_level(self, tmp_path):
+        root = make_context_root(tmp_path)
+        make_venv(root)
+        cls = make_class(root, "treasury")
+        task = make_task(cls, "monthly-bank-fees")
+        result = run_install_deps(task)
         assert result.returncode == 0
 
-    def test_finds_context_root_from_class_level(self, class_dir):
-        result = run_install_deps(class_dir)
+    def test_finds_context_root_from_class_level(self, tmp_path):
+        root = make_context_root(tmp_path)
+        make_venv(root)
+        cls = make_class(root, "treasury")
+        result = run_install_deps(cls)
         assert result.returncode == 0
 
-    def test_finds_context_root_from_root_level(self, engagement_root):
-        result = run_install_deps(engagement_root)
+    def test_finds_context_root_from_root_level(self, tmp_path):
+        root = make_context_root(tmp_path)
+        make_venv(root)
+        result = run_install_deps(root)
         assert result.returncode == 0
 
-    def test_installs_top_down_order(self, task_dir):
+    def test_installs_top_down_order(self, tmp_path):
         """Root requirements installed before class, class before task."""
+        root = make_context_root(tmp_path)
+        make_venv(root)
+        cls = make_class(root, "treasury")
+        task = make_task(cls, "monthly-bank-fees")
+
         # Write distinctive content to each requirements.txt so we can
         # verify order in pip output (or at minimum, that all are processed)
-        root_path = task_dir.parent.parent
-        (root_path / "requirements.txt").write_text("# root-deps\n")
-        (task_dir.parent / "requirements.txt").write_text("# class-deps\n")
-        (task_dir / "requirements.txt").write_text("# task-deps\n")
+        (root / "requirements.txt").write_text("# root-deps\n")
+        (cls / "requirements.txt").write_text("# class-deps\n")
+        (task / "requirements.txt").write_text("# task-deps\n")
 
-        result = run_install_deps(task_dir)
+        result = run_install_deps(task)
         assert result.returncode == 0
 
     def test_skips_missing_requirements_txt(self, tmp_path):
         """If a level has no requirements.txt, it's skipped without error."""
         root = make_context_root(tmp_path)
+        make_venv(root)
         cls = make_class(root, "treasury")
         task = make_task(cls, "my-task")
 
@@ -95,3 +110,10 @@ class TestPreconditions:
         result = run_install_deps(nested)
         assert result.returncode == 1
         assert "No .context-root found" in result.stderr
+
+    def test_exit_2_no_venv(self, tmp_path):
+        """Exits 2 when no venv exists at the engagement root."""
+        root = make_context_root(tmp_path)
+        result = run_install_deps(root)
+        assert result.returncode == 2
+        assert "No venv found" in result.stderr

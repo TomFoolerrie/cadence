@@ -199,7 +199,7 @@ def make_context_root(
 
     # .gitignore
     (path / ".gitignore").write_text(
-        "**/periods/*/data/\n**/periods/*/workpapers/\n.context-cache/\n.DS_Store\n"
+        "**/periods/*/data/\n**/periods/*/workpapers/\n.context-cache/\n.DS_Store\nvenv/\n"
     )
 
     return path
@@ -341,6 +341,21 @@ def make_period(task_path: Path, period: str) -> Path:
     (period_dir / "workpapers").mkdir(parents=True, exist_ok=True)
     (period_dir / "review-notes").mkdir(parents=True, exist_ok=True)
     return period_dir
+
+
+def make_venv(root: Path) -> Path:
+    """Create a mock venv structure for testing (avoids real python -m venv)."""
+    venv_dir = root / "venv" / "bin"
+    venv_dir.mkdir(parents=True, exist_ok=True)
+    # Mock pip as a shell script that succeeds
+    pip_path = venv_dir / "pip"
+    pip_path.write_text("#!/bin/sh\nexit 0\n")
+    pip_path.chmod(0o755)
+    # Mock python
+    python_path = venv_dir / "python"
+    python_path.write_text("#!/bin/sh\nexit 0\n")
+    python_path.chmod(0o755)
+    return root / "venv"
 
 
 def start_to_done(task_dir, period):

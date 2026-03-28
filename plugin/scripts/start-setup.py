@@ -86,6 +86,14 @@ def main() -> int:
         print(result.stderr.strip(), file=sys.stderr)
         return result.returncode
 
+    # --- Step 1.5: init-venv.py (idempotent) ---
+    result = _run_script("init-venv.py", [])
+    if result.returncode != 0:
+        error_msg = result.stderr.strip() or "init-venv.py failed"
+        _set_blocked(error_msg)
+        print(error_msg, file=sys.stderr)
+        return 2
+
     # --- Step 2: install-deps.py ---
     result = _run_script("install-deps.py", [])
     if result.returncode != 0:

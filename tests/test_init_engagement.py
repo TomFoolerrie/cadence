@@ -80,6 +80,7 @@ class TestCreatesEngagementDirectory:
         assert "**/periods/*/workpapers/" in content
         assert ".context-cache/" in content
         assert ".DS_Store" in content
+        assert "venv/" in content
 
     def test_requirements_txt_is_empty(self, tmp_path):
         target = tmp_path / "acme-corp"

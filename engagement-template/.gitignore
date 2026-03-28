@@ -2,3 +2,4 @@
 **/periods/*/workpapers/
 .context-cache/
 .DS_Store
+venv/
