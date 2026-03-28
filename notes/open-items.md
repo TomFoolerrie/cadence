@@ -20,11 +20,36 @@ Priorities revised after second dry run (2026-03-28).
 | 16 | ~~Consolidate `/onboard` to 3 script calls~~ | Done | `onboard-setup.py` (context + scaffold), `onboard-register.py` (venv + deps + manifest), `start-setup.py` reuse for first period. Reduced from 7-8 calls. |
 | 17 | ~~Cowork sandbox compatibility~~ | Done | `.resolve()` → `.absolute()` in all walk-up functions (4 scripts). Venv init non-fatal in wrapper scripts. `install-deps.py` falls back to system pip. `/onboard` defers tool building until real data arrives. |
 | 9 | Test Chase PDF parsing (only BofA tested so far) | Medium | |
-| 10 | Test `/start` flow (second period onward) | Next | Dry run 2 (2026-03-28) validated `/onboard` through `review_ready`. Next: complete `/done`, then test `/start` for period 2. |
+| 10 | ~~Test `/start` flow (second period onward)~~ | Done | Dry run 2 (2026-03-28): `/start` for 2026-03 worked end-to-end. `check-periods.py` reset the task, `start-setup.py` set up the period, tool produced correct workpapers, status reached `review_ready`. |
 | 11 | Test `/done` with corrections (only tested approved path) | Next | |
 | 13 | Finish `archive-period.py` | Medium | Script is a stub — checks Google Drive credentials then exits 2. `/done` treats this as non-blocking. |
 | 18 | Update skills to work from engagement root | Next | Cowork sessions must mount from engagement root. Skills currently assume cwd is class/task dir. `/status` needs `cd <class>/`. `/start` and `/done` need `cd <class>/<task>/`. `/onboard` class-level works; task-level needs navigation from root. |
-| 19 | Git operations fail in Cowork sandbox | Next | Sandbox allows read/write but restricts file deletion. Git needs to delete lock files (`.git/index.lock`) during normal operations like `git add`. All skill commits fail silently. Options: (a) skills skip git in sandbox, user commits locally; (b) investigate Cowork sandbox permissions. Git repos should be initialized locally, not from within the sandbox. |
+| 19 | Git operations in Cowork sandbox | Investigate | Dry run 1 reported git failures due to sandbox lock file deletion restriction. But dry run 2 produced 4 clean commits in the sandbox. Behavior may be intermittent or depend on sandbox configuration. Needs more observation. |
+| 20 | AGENT.md not populated during onboard | Next | Dry run 2: AGENT.md left as blank template (entity name, FYE, materiality all empty). `.context-root` engagement name also empty. Onboard SKILL.md should prompt user to fill in entity details. |
+
+## Post-Dry-Run 2 Review (2026-03-28)
+
+### What Worked
+
+Full lifecycle completed in Cowork sandbox: `/onboard` → `/done` (approved 2026-02) → `check-periods.py` auto-reset → `/start` (2026-03) → `review_ready`. Four clean git commits.
+
+- **Script gating held.** All scaffolding went through scripts. Write scope enforcement prevented direct YAML manipulation. The "hard boundaries" strategy from dry run 1 is validated.
+- **Tool building deferred until real data.** SKILL.md change (defer tools to Step 7b) worked — agent waited for CashPro CSV before building `categorize_fees.py`. Tool matched SKILL.md procedure exactly.
+- **Workpapers correct.** Both periods produced balanced JEs ($998.25 for 2026-02, $1,017.75 for 2026-03). All rows categorized, no "Other" bucket items.
+- **`learned.md` populated.** Review history, confirmed patterns, and anticipatory failure modes recorded after first period.
+- **`check-periods.py` triggered correctly.** Detected anchor passed, reset task for new period.
+
+### Issues Found
+
+1. **AGENT.md left blank** — onboard never prompted user to fill in entity details (legal name, FYE, materiality, key systems, primary contact). `.context-root` engagement name also empty. Task agents won't have entity context. → Item 20.
+2. **Git worked in sandbox** — contradicts dry run 1 findings (Item 19). Either the sandbox permissions vary between sessions or the lock file issue is intermittent. Downgraded Item 19 to "Investigate."
+3. **Sandbox path issues fixed same-day** — `.resolve()` → `.absolute()` and venv system pip fallback resolved the Cowork compatibility issues (Item 17).
+
+### Verdict
+
+The core system works. The full `/onboard` → `/done` → `/start` cycle ran successfully with correct output. Remaining gaps are ergonomic (AGENT.md prompting) not structural.
+
+---
 
 ## Post-Dry-Run Review (2026-03-26)
 
