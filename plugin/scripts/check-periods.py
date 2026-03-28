@@ -70,7 +70,7 @@ def next_period_string(current_period: str, period_format: str) -> str:
 
 WEEKDAY_MAP = {
     "monday": 0, "tuesday": 1, "wednesday": 2,
-    "thursday": 3, "friday": 4,
+    "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
 }
 
 
@@ -81,46 +81,70 @@ def first_weekday_of_month(year: int, month: int, weekday: int) -> date:
     return first + timedelta(days=diff)
 
 
+def last_weekday_of_month(year: int, month: int, weekday: int) -> date:
+    """Return the last occurrence of weekday (0=Mon) in the given month."""
+    # Find last day of month
+    if month == 12:
+        last = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        last = date(year, month + 1, 1) - timedelta(days=1)
+    diff = (last.weekday() - weekday) % 7
+    return last - timedelta(days=diff)
+
+
 def compute_anchor_date(
     current_period: str,
     period_format: str,
     anchor: str,
-    done_at_str: str,
 ) -> date:
     """
-    Compute the next anchor date after which the task should be reset.
+    Compute the anchor date for the next cycle after the current period.
 
-    For monthly with "first_<weekday>": first occurrence of that weekday
-    in the month after the next period (two months ahead of current).
+    One-ahead logic: the anchor falls within the next period's timeframe.
 
-    For quarterly with "first_<weekday>": first occurrence of that weekday
-    in the first month of the quarter after the next quarter.
-
+    For monthly with "first_<weekday>": first weekday of the NEXT period's month.
+    For monthly with "last_<weekday>": last weekday of the NEXT period's month.
+    For quarterly with "first_<weekday>": first weekday of the first month of
+        the NEXT quarter.
+    For quarterly with "last_<weekday>": last weekday of the final month of
+        the NEXT quarter.
     For weekly with bare weekday: that weekday of the next ISO week.
     """
     next_per = next_period_string(current_period, period_format)
 
     if period_format == "monthly" and anchor.startswith("first_"):
-        # Anchor is the first <weekday> of the month AFTER the next period.
-        # e.g. current=2026-03, next=2026-04, anchor month=May 2026
-        anchor_period = next_period_string(next_per, period_format)
+        # e.g. current=2026-03, next=2026-04 → first weekday of April
         day_name = anchor[len("first_"):]
         weekday = WEEKDAY_MAP[day_name]
-        year = int(anchor_period[:4])
-        month = int(anchor_period[5:7])
+        year = int(next_per[:4])
+        month = int(next_per[5:7])
         return first_weekday_of_month(year, month, weekday)
 
+    elif period_format == "monthly" and anchor.startswith("last_"):
+        # e.g. current=2026-03, next=2026-04 → last weekday of April
+        day_name = anchor[len("last_"):]
+        weekday = WEEKDAY_MAP[day_name]
+        year = int(next_per[:4])
+        month = int(next_per[5:7])
+        return last_weekday_of_month(year, month, weekday)
+
     elif period_format == "quarterly" and anchor.startswith("first_"):
-        # Anchor is the first <weekday> of the first month of the quarter
-        # AFTER the next period's quarter.
-        # e.g. current=Q1, next=Q2, anchor quarter=Q3
-        anchor_period = next_period_string(next_per, period_format)
-        year = int(anchor_period[:4])
-        quarter = int(anchor_period[6])
+        # e.g. current=Q1, next=Q2 → first weekday of first month of Q2 (April)
+        year = int(next_per[:4])
+        quarter = int(next_per[6])
         month = (quarter - 1) * 3 + 1
         day_name = anchor[len("first_"):]
         weekday = WEEKDAY_MAP[day_name]
         return first_weekday_of_month(year, month, weekday)
+
+    elif period_format == "quarterly" and anchor.startswith("last_"):
+        # e.g. current=Q1, next=Q2 → last weekday of final month of Q2 (June)
+        year = int(next_per[:4])
+        quarter = int(next_per[6])
+        month = (quarter - 1) * 3 + 3  # final month of quarter
+        day_name = anchor[len("last_"):]
+        weekday = WEEKDAY_MAP[day_name]
+        return last_weekday_of_month(year, month, weekday)
 
     elif period_format == "weekly":
         # Bare weekday anchor: the weekday of the next ISO week
@@ -131,9 +155,8 @@ def compute_anchor_date(
         # ISO weekday: Monday=1 .. Sunday=7
         return date.fromisocalendar(year, week, weekday + 1)
 
-    # Fallback: tomorrow (should not happen with well-formed data)
-    done_at = datetime.fromisoformat(done_at_str.replace("Z", "+00:00")).date()
-    return done_at + timedelta(days=1)
+    # Fallback: should not happen with well-formed data
+    raise ValueError(f"Cannot compute anchor date for {period_format}/{anchor}")
 
 
 # ---------------------------------------------------------------------------
@@ -208,13 +231,25 @@ def main() -> int:
 
                 current_period = status_data.get("period", "")
 
-                # Compute anchor date
+                # Compute next period and anchor date (one-ahead)
+                next_per = next_period_string(current_period, period_format)
                 anchor_date = compute_anchor_date(
-                    current_period, period_format, anchor, done_at_str,
+                    current_period, period_format, anchor,
                 )
 
+                # Late-completion guard: if the task was finished after
+                # the anchor already passed, push to the next cycle.
+                done_at = datetime.fromisoformat(
+                    done_at_str.replace("Z", "+00:00")
+                ).date()
+                if anchor_date <= done_at:
+                    skipped_per = next_per
+                    next_per = next_period_string(next_per, period_format)
+                    anchor_date = compute_anchor_date(
+                        skipped_per, period_format, anchor,
+                    )
+
                 if today >= anchor_date:
-                    next_per = next_period_string(current_period, period_format)
                     schema_version = status_data.get("schema_version", 1)
 
                     new_status = {

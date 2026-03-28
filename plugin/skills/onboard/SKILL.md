@@ -82,33 +82,25 @@ Tell the user: *"Class created. Navigate into `<name>/` and run `/onboard` again
 
 ## Task-Level Onboarding
 
-### Step 1 — Load Context
-
-Run:
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/load-context.py --level class
-```
-
-This loads both root AGENT.md and class AGENT.md so you understand the full context.
-
-### Step 2 — Name the Task
+### Step 1 — Name the Task
 
 Ask the user: *"What task is this? Give me a short name."*
 
 Map to kebab-case (e.g., "Monthly bank fees" becomes `monthly-bank-fees`).
 
-### Step 3 — Scaffold
+### Step 2 — Setup
 
-Run (substituting the kebab-case name from Step 2):
+Run (substituting the kebab-case name from Step 1):
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/init-task.py <name>
+python ${CLAUDE_PLUGIN_ROOT}/scripts/onboard-setup.py <name>
 ```
 
-This creates the task folder with SKILL.md (template), learned.md (template), status.yaml, tools/, periods/, and requirements.txt.
+This loads class context (root AGENT.md + class AGENT.md) and scaffolds the task directory with SKILL.md (template), learned.md (template), status.yaml, tools/, periods/, and requirements.txt.
 
-### Step 4 — Deep Interview
+The loaded context is printed to stdout — read it to understand what class you are onboarding into.
+
+### Step 3 — Deep Interview
 
 This is the core of onboarding. Extract everything the preparer knows -- including things they consider "obvious." Ask follow-up questions. Do not rush.
 
@@ -156,7 +148,7 @@ Cover each topic below. Write answers to the indicated file and section as you g
 - Capture the implicit. Ask: *"Is there anything you do automatically that you haven't mentioned?"* and *"What would a new hire get wrong the first time?"*
 - Be token-conscious. SKILL.md and learned.md are loaded every period. Keep them focused. Do not duplicate information between sections.
 
-### Step 5 — Check Existing Tools
+### Step 4 — Check Existing Tools
 
 Before writing new tools, check what already exists:
 
@@ -165,7 +157,7 @@ Before writing new tools, check what already exists:
 
 Reuse what you can. If multiple tasks would parse the same source format, that parser belongs at the class level. Only build task-level tools for logic unique to this task.
 
-### Step 6 — Build Files
+### Step 5 — Build Files
 
 Write the files based on the interview:
 
@@ -174,57 +166,44 @@ Write the files based on the interview:
 - **tools/** -- Build the Python scripts that do transformation and validation work. Ensure all tool output paths default to the standard period subdirectories.
 - **requirements.txt** -- Add task-specific Python dependencies. Check class-level and root-level requirements.txt first -- do not duplicate.
 
-### Step 7 — Install Dependencies
+### Step 6 — Register Task
 
-Run:
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.py
-```
-
-This installs requirements.txt files top-down (root, class, task).
-
-### Step 8 — Add to Manifest
-
-Add the task to the class manifest **before** the dry run — `init-period.py` needs the task's `period_format` from the manifest to validate the period string.
+Register the task in the class manifest **before** the first period execution — `init-period.py` needs the task's `period_format` from the manifest to validate the period string.
 
 Ask the user:
 - *"Should this run in parallel with existing tasks, or does it depend on one finishing first?"* — this determines the `order` value.
-- Confirm the `period_format` and `anchor` from the scheduling discussion in Step 4.
+- Confirm the `period_format` and `anchor` from the scheduling discussion in Step 3.
 
 Run (substituting values from the interview):
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/edit-class-yaml.py add-task <name> --order <N> --period-format <format> --anchor <anchor>
+python ${CLAUDE_PLUGIN_ROOT}/scripts/onboard-register.py <name> --order <N> --period-format <format> --anchor <anchor>
 ```
 
-If the user mentioned a description for the class during the interview, also run:
+If the user mentioned a description for the class during the interview, add `--description "<description>"` to the same command.
 
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/edit-class-yaml.py set-description "<description>"
-```
+This installs dependencies (init-venv + install-deps), adds the task to `.class.yaml` manifest, and optionally sets the class description.
 
-### Step 9 — First Period Execution
+### Step 7 — First Period Execution
 
 Execute the first period inline to validate the knowledge transfer. This is not a dry run — it produces real output for a real period. You retain full write scope, so if execution reveals a problem with SKILL.md or tools, fix them and re-run while the preparer is still present.
 
-#### 9a — Set Period
+#### 7a — Start Period
 
-Ask the user: *"Which period should we execute? This is the period being closed (e.g., if it's April, use `2026-03` for March close)."*
+Ask the user: *"Which period should we execute? This is the label for the work (e.g., `2026-03` for monthly, `2026-Q1` for quarterly)."*
 
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py in_progress --period "<period>"
-```
-
-#### 9b — Scaffold Period
+Run from the task directory (`<name>/`):
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>
+cd <name>/
+python ${CLAUDE_PLUGIN_ROOT}/scripts/start-setup.py --period "<period>"
 ```
 
-Creates `periods/{period}/` with `data/`, `workpapers/`, and `review-notes/`.
+This sets status to `in_progress`, installs deps, scaffolds the period directory, and loads context. **Note:** The stdout context from `start-setup.py` can be disregarded — you already loaded context in Step 2.
 
-#### 9c — Execute
+#### 7b — Execute
+
+Before running engagement tools, activate the venv: `source <root>/venv/bin/activate` where `<root>` is the engagement root containing `.context-root`.
 
 Follow the `## Procedure` section of SKILL.md:
 
@@ -243,7 +222,7 @@ Follow the `## Procedure` section of SKILL.md:
   ```
   Discuss with the user whether to retry later or continue onboarding without the first period.
 
-#### 9d — Set Review Ready
+#### 7c — Set Review Ready
 
 When execution succeeds and validation passes:
 
@@ -257,7 +236,7 @@ Report to the user:
 - How results compare to learned.md patterns
 - *"First period complete. Review the output, then run `/done` to capture learnings and finalize."*
 
-### Step 10 — Finalize
+### Step 8 — Finalize
 
 ```bash
 git add <task-directory>/ <class>/.class.yaml

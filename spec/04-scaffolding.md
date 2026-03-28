@@ -31,6 +31,10 @@ accounting-plugin/
     └── status/SKILL.md             ← class progress dashboard
 ```
 
+### `${CLAUDE_PLUGIN_ROOT}`
+
+Cowork sets `${CLAUDE_PLUGIN_ROOT}` to the absolute path of the plugin's installation directory at runtime. All script invocations in skill files use this prefix (e.g., `python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py`). The variable is replaced on each plugin update.
+
 ## 6.2 Setup Flow
 
 ```
@@ -228,11 +232,11 @@ The user can then navigate into the new class and `/onboard` a task.
 
 **Task-level onboarding** (from class — creates a new task):
 
-1. **Step 0 — Load context:** `load-context.py --level class` loads root AGENT.md and class AGENT.md so the agent understands what class it's onboarding into.
-2. **Step 1 — Create task:** `init-task.py <name>` scaffolds the task folder with SKILL.md, learned.md, status.yaml templates, tools/, periods/, and requirements.txt.
-3. **Step 2 — Interview:** Structured conversation with the user that extracts their knowledge — what the task produces, where data comes from, step-by-step procedure, validation rules, what goes wrong. Writes SKILL.md, seeds learned.md, builds tools in tools/.
-4. **Step 3 — First period execution:** Executes the task for the current period to validate the knowledge transfer. Sets `in_progress` via `set-status.py`, calls `init-period.py` to scaffold the period, executes the procedure, produces a draft, and sets `review_ready`. The user then runs `/done` in the same conversation to complete the first period — capturing learnings, setting `done`, and archiving to Drive.
-5. **Finalize:** Adds the task to `.class.yaml` manifest with `enabled: true`. Git commit covers scaffolding + dry run output. `/done` produces a separate commit for learnings and completion.
+1. **Step 1 — Setup:** `onboard-setup.py <name>` loads class context (`load-context.py --level class`) and scaffolds the task folder (`init-task.py <name>`) in a single call. Returns context to stdout.
+2. **Step 2 — Interview:** Structured conversation with the user that extracts their knowledge — what the task produces, where data comes from, step-by-step procedure, validation rules, what goes wrong. Writes SKILL.md, seeds learned.md, builds tools in tools/.
+3. **Step 3 — Register:** `onboard-register.py <name> --order N --period-format fmt --anchor anchor [--description "text"]` installs dependencies (`init-venv.py` + `install-deps.py`), adds the task to `.class.yaml` manifest (`edit-class-yaml.py add-task`), and optionally sets the class description. This must happen before the first period execution because `init-period.py` needs the task's `period_format` from the manifest.
+4. **Step 4 — First period execution:** Runs `start-setup.py --period "<period>"` from the task directory to set `in_progress`, install deps, scaffold the period, and load context. Then executes the procedure, produces a draft, and sets `review_ready`. The user then runs `/done` in the same conversation to complete the first period — capturing learnings, setting `done`, and archiving to Drive.
+5. **Finalize:** Git commit covers scaffolding + first period output. `/done` produces a separate commit for learnings and completion.
 
 `/start` is only used from the **next period onward**. The first period is executed as part of onboarding to validate that the task works end-to-end with real data.
 
@@ -260,7 +264,7 @@ periods/<period>/
 
 **Guard:** Before creating a new period, the script reads `status.yaml` and checks that the current status is `in_progress`. `/start` sets `in_progress` before calling `init-period.py`. This ensures the task is actively being worked before scaffolding a new period.
 
-**Period string convention:** The period string refers to the **period being closed**, not the current calendar period. For example, period `2026-03` is worked on in April — the March books are closed during the April cycle. This is a domain convention that aligns with how accounting close processes work.
+**Period string convention:** The period string is a label for the work being done in this cycle. For example, period `2026-03` labels March's work. The anchor system (see Section 6.6) determines when the next cycle begins.
 
 **Period naming formats:** Period format is configurable per task via the `period_format` field in `.class.yaml` (see `02-architecture.md` Section 3, Manifest fields). The default is `monthly`. These formats define the directory names used under each task's `periods/` folder.
 
@@ -298,14 +302,19 @@ check-periods.py
    b. Skip if status is not terminal (done or abandoned)
    c. Read done_at timestamp from status.yaml
    d. Read task's anchor and period_format from .class.yaml
-   e. Compute next_anchor_date from done_at + anchor + period_format:
-      - monthly, anchor first_monday: first Monday of the month after current period
-      - weekly, anchor monday: the next Monday after done_at
-      - quarterly, anchor first_monday: first Monday of the quarter after current period
+   e. Compute next_per = next_period_string(current_period)
+   f. Compute anchor_date (one-ahead logic):
+      - monthly + first_<weekday>: first <weekday> of the NEXT period's month
+      - monthly + last_<weekday>: last <weekday> of the NEXT period's month
+      - quarterly + first_<weekday>: first <weekday> of the first month of the NEXT quarter
+      - quarterly + last_<weekday>: last <weekday> of the final month of the NEXT quarter
+      - weekly + <weekday>: that weekday of the next ISO week
       - adhoc: skip (cannot auto-compute; requires manual /start)
-   f. If today >= next_anchor_date:
-      - Compute next period string from period_format (2026-03 → 2026-04, etc.)
-      - Reset status.yaml: period → next_period, status → not_started,
+   g. Late-completion guard: if anchor_date <= done_at, the task finished
+      after the anchor already passed. Push both next_per and anchor_date
+      forward by one more cycle.
+   h. If today >= anchor_date:
+      - Reset status.yaml: period → next_per, status → not_started,
         issues → [], done_at → null
 3. Git commit per class (if any resets occurred in that class):
       "[check] class-name: reset N tasks for new period"
@@ -323,7 +332,9 @@ check-periods.py
 
 **Year boundary handling:** Period string increment must handle year rollover: `2026-12` → `2027-01` (monthly), `2026-Q4` → `2027-Q1` (quarterly), `2026-W52` → `2027-W01` (weekly). Implementers must account for ISO week numbering edge cases (some years have W53).
 
-**Example:** A monthly task with `anchor: first_monday` finishes March's period on April 7 (`done_at: "2026-04-07T14:30:00Z"`). The next period is April, and `first_monday` after April ends is May 5. `check-periods.py` runs daily. On May 5, it detects that today >= May 5, resets the task to `not_started` for period `2026-04`, and clears `done_at`.
+**Example:** A monthly task with `anchor: first_monday` finishes March's period on April 3 (`done_at: "2026-04-03T14:30:00Z"`). The next period is April. The one-ahead anchor is the first Monday of April = April 6. Since done_at (April 3) is before the anchor (April 6), no late-completion guard fires. `check-periods.py` runs daily. On April 6, it detects that today >= April 6, resets the task to `not_started` for period `2026-04`, and clears `done_at`.
+
+**Late-completion example:** Same task, but finished on April 20 (`done_at: "2026-04-20T14:30:00Z"`). The anchor (April 6) has already passed by done_at, so the late-completion guard fires: next_per advances from `2026-04` to `2026-05`, and the anchor advances to the first Monday of May = May 4. On May 4, the task resets to `not_started` for period `2026-05`.
 
 **What `/status` shows.** `/status` reads the current state — if `check-periods.py` has reset tasks, they show as `not_started` and ready for `/start`. If the anchor hasn't arrived yet, they show as `done` with a "next due" date derived from `done_at` + anchor.
 
@@ -335,9 +346,9 @@ The `anchor` field in `.class.yaml` defines **when** a task should be triggered 
 
 | Pattern | Meaning | Use case |
 |---------|---------|----------|
-| `first_monday` .. `first_friday` | First occurrence of that weekday after the period ends | Monthly/quarterly tasks (e.g., close starts first Monday of the new month) |
-| `last_monday` .. `last_friday` | Last occurrence of that weekday before the period ends | Pre-close tasks (e.g., preliminary reconciliation last Friday of the month) |
-| `monday` .. `sunday` | Every occurrence of that weekday within the period | Weekly tasks (e.g., cash position every Monday) |
+| `first_monday` .. `first_sunday` | First occurrence of that weekday in the next period's month/quarter | Monthly/quarterly tasks (e.g., close starts first Monday of the new month) |
+| `last_monday` .. `last_sunday` | Last occurrence of that weekday in the next period's month/quarter | Pre-close tasks (e.g., preliminary reconciliation last Friday of the month) |
+| `monday` .. `sunday` | That weekday of the next ISO week | Weekly tasks (e.g., cash position every Monday) |
 
 **MVP behavior:** `anchor` is **advisory**. The human reads it as a scheduling reminder when `/status` displays the class dashboard. The human still invokes `/start` manually — the anchor tells them *when* they should.
 

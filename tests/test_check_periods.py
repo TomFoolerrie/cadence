@@ -47,16 +47,16 @@ class TestResets:
     """check-periods.py resets terminal tasks when anchor date has passed."""
 
     def test_resets_done_task_when_anchor_passed(self, tmp_path):
-        """Task done for 2026-03, first_monday anchor → resets after 2026-05-04."""
+        """Task done for 2026-03, first_monday anchor → resets after first Monday of April (Apr 6)."""
         root = make_context_root(tmp_path)
         cls = make_class(root, "treasury", manifest=[
             {"task": "bank-fees", "order": 1, "enabled": True,
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "bank-fees", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
-        result = run_check_periods(root, as_of="2026-05-05")
+        result = run_check_periods(root, as_of="2026-04-06")
         assert result.returncode == 0
         assert "bank-fees" in result.stdout
         assert "reset" in result.stdout
@@ -72,9 +72,9 @@ class TestResets:
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "bank-fees", status="abandoned", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z", issues=["unrecoverable"])
+                  done_at="2026-04-05T14:30:00Z", issues=["unrecoverable"])
 
-        result = run_check_periods(root, as_of="2026-05-05")
+        result = run_check_periods(root, as_of="2026-04-06")
         assert result.returncode == 0
         assert "bank-fees" in result.stdout
         assert "reset" in result.stdout
@@ -151,17 +151,22 @@ class TestSkips:
         assert data["status"] == "done"
 
     def test_skips_when_anchor_not_reached(self, tmp_path):
-        """Done recently, next anchor date is in the future."""
+        """Done recently, next anchor date is in the future.
+
+        One-ahead anchor: first Monday of April (Apr 6). done_at is Apr 5
+        (before anchor), so no late-completion guard. as-of Apr 4 is before
+        anchor → task stays done.
+        """
         root = make_context_root(tmp_path)
         cls = make_class(root, "treasury", manifest=[
             {"task": "bank-fees", "order": 1, "enabled": True,
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "bank-fees", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
-        # As-of date is BEFORE the next anchor (first Monday of May = May 4)
-        result = run_check_periods(root, as_of="2026-04-15")
+        # As-of date is BEFORE the anchor (first Monday of April = Apr 6)
+        result = run_check_periods(root, as_of="2026-04-04")
         assert result.returncode == 0
 
         data = read_yaml(cls / "bank-fees" / "status.yaml")
@@ -183,9 +188,9 @@ class TestPeriodMath:
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "t", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
-        run_check_periods(root, as_of="2026-05-05")
+        run_check_periods(root, as_of="2026-04-06")
         assert read_yaml(cls / "t" / "status.yaml")["period"] == "2026-04"
 
     def test_monthly_december_rollover(self, tmp_path):
@@ -194,10 +199,11 @@ class TestPeriodMath:
             {"task": "t", "order": 1, "enabled": True,
              "period_format": "monthly", "anchor": "first_monday"},
         ])
+        # First Monday of Jan 2027 = Jan 4. done_at must be before that.
         make_task(cls, "t", status="done", period="2026-12",
-                  done_at="2027-01-05T14:30:00Z")
+                  done_at="2027-01-03T14:30:00Z")
 
-        run_check_periods(root, as_of="2027-02-02")
+        run_check_periods(root, as_of="2027-01-04")
         assert read_yaml(cls / "t" / "status.yaml")["period"] == "2027-01"
 
     def test_weekly_increment(self, tmp_path):
@@ -206,10 +212,11 @@ class TestPeriodMath:
             {"task": "t", "order": 1, "enabled": True,
              "period_format": "weekly", "anchor": "monday"},
         ])
+        # Monday of W13 = Mar 23. done_at must be before that.
         make_task(cls, "t", status="done", period="2026-W12",
-                  done_at="2026-03-23T14:30:00Z")
+                  done_at="2026-03-22T14:30:00Z")
 
-        run_check_periods(root, as_of="2026-03-30")
+        run_check_periods(root, as_of="2026-03-23")
         assert read_yaml(cls / "t" / "status.yaml")["period"] == "2026-W13"
 
     def test_weekly_year_rollover(self, tmp_path):
@@ -218,24 +225,27 @@ class TestPeriodMath:
             {"task": "t", "order": 1, "enabled": True,
              "period_format": "weekly", "anchor": "monday"},
         ])
+        # Monday of W53 = Dec 28. done_at must be before that.
         make_task(cls, "t", status="done", period="2026-W52",
-                  done_at="2026-12-28T14:30:00Z")
+                  done_at="2026-12-27T14:30:00Z")
 
-        run_check_periods(root, as_of="2027-01-04")
+        run_check_periods(root, as_of="2026-12-28")
         next_period = read_yaml(cls / "t" / "status.yaml")["period"]
-        # Should be W53 or W01 of 2027 depending on ISO week rules
+        # 2026 has 53 weeks, so W52+1 = W53
         assert next_period.startswith("202")
 
     def test_quarterly_increment(self, tmp_path):
+        """Quarterly Q1 → Q2. One-ahead anchor = first Monday of Q2 (April 6)."""
         root = make_context_root(tmp_path)
         cls = make_class(root, "reporting", manifest=[
             {"task": "t", "order": 1, "enabled": True,
              "period_format": "quarterly", "anchor": "first_monday"},
         ])
+        # First Monday of Q2 (April) = April 6. done_at must be before that.
         make_task(cls, "t", status="done", period="2026-Q1",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
-        run_check_periods(root, as_of="2026-07-06")
+        run_check_periods(root, as_of="2026-04-06")
         assert read_yaml(cls / "t" / "status.yaml")["period"] == "2026-Q2"
 
     def test_quarterly_q4_rollover(self, tmp_path):
@@ -244,10 +254,11 @@ class TestPeriodMath:
             {"task": "t", "order": 1, "enabled": True,
              "period_format": "quarterly", "anchor": "first_monday"},
         ])
+        # First Monday of Q1 2027 (January) = Jan 4. done_at must be before that.
         make_task(cls, "t", status="done", period="2026-Q4",
-                  done_at="2027-01-05T14:30:00Z")
+                  done_at="2027-01-03T14:30:00Z")
 
-        run_check_periods(root, as_of="2027-04-06")
+        run_check_periods(root, as_of="2027-01-04")
         assert read_yaml(cls / "t" / "status.yaml")["period"] == "2027-Q1"
 
 
@@ -260,65 +271,67 @@ class TestAnchorComputation:
     """Verify anchor date calculation for different anchor types."""
 
     def test_first_monday_monthly(self, tmp_path):
-        """For period 2026-03 (monthly), first Monday of April 2026 is April 6."""
+        """For period 2026-03 (monthly), one-ahead anchor = first Monday of April = April 6.
+        done_at before anchor → no guard. as-of on anchor day → triggers reset."""
         root = make_context_root(tmp_path)
         cls = make_class(root, "treasury", manifest=[
             {"task": "t", "order": 1, "enabled": True,
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "t", status="done", period="2026-03",
-                  done_at="2026-04-06T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
         # April 6 is the first Monday of April — should trigger on or after
         result = run_check_periods(root, as_of="2026-04-06")
         assert result.returncode == 0
 
         data = read_yaml(cls / "t" / "status.yaml")
-        # Whether reset occurs depends on anchor date math; verify no crash
-        # and status is a valid value
-        assert data["status"] in ("done", "not_started")
+        assert data["status"] == "not_started"
 
     def test_first_wednesday_monthly(self, tmp_path):
-        """For period 2026-03, first Wednesday of April 2026 is April 1."""
+        """For period 2026-03, one-ahead anchor = first Wednesday of April = April 1.
+        done_at must be before April 1 to avoid late-completion guard."""
         root = make_context_root(tmp_path)
         cls = make_class(root, "treasury", manifest=[
             {"task": "t", "order": 1, "enabled": True,
              "period_format": "monthly", "anchor": "first_wednesday"},
         ])
         make_task(cls, "t", status="done", period="2026-03",
-                  done_at="2026-04-01T14:30:00Z")
+                  done_at="2026-03-31T14:30:00Z")
 
-        result = run_check_periods(root, as_of="2026-05-06")
+        result = run_check_periods(root, as_of="2026-04-01")
         assert result.returncode == 0
 
     def test_monday_anchor_weekly(self, tmp_path):
-        """Weekly task with monday anchor — next Monday after done_at."""
+        """Weekly task with monday anchor — Monday of the next ISO week."""
         root = make_context_root(tmp_path)
         cls = make_class(root, "treasury", manifest=[
             {"task": "t", "order": 1, "enabled": True,
              "period_format": "weekly", "anchor": "monday"},
         ])
+        # Monday of W13 = Mar 23. done_at must be before that.
         make_task(cls, "t", status="done", period="2026-W12",
-                  done_at="2026-03-23T14:30:00Z")
+                  done_at="2026-03-22T14:30:00Z")
 
-        result = run_check_periods(root, as_of="2026-03-30")
+        result = run_check_periods(root, as_of="2026-03-23")
         assert result.returncode == 0
 
         data = read_yaml(cls / "t" / "status.yaml")
         assert data["status"] == "not_started"
 
     def test_first_monday_quarterly(self, tmp_path):
-        """Quarterly task — first Monday of the quarter after current period."""
+        """Quarterly task — one-ahead anchor = first Monday of Q2 (April 6)."""
         root = make_context_root(tmp_path)
         cls = make_class(root, "reporting", manifest=[
             {"task": "t", "order": 1, "enabled": True,
              "period_format": "quarterly", "anchor": "first_monday"},
         ])
+        # First Monday of Q2 (April) = April 6. done_at before that.
         make_task(cls, "t", status="done", period="2026-Q1",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
-        # First Monday of Q3 (July 2026) is July 6
-        result = run_check_periods(root, as_of="2026-07-06")
+        # First Monday of Q2 (April 2026) is April 6
+        result = run_check_periods(root, as_of="2026-04-06")
         assert result.returncode == 0
 
 
@@ -337,9 +350,9 @@ class TestResetSideEffects:
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "t", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
-        run_check_periods(root, as_of="2026-05-05")
+        run_check_periods(root, as_of="2026-04-06")
 
         data = read_yaml(cls / "t" / "status.yaml")
         assert data["issues"] == []
@@ -352,9 +365,9 @@ class TestResetSideEffects:
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "t", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
-        run_check_periods(root, as_of="2026-05-05")
+        run_check_periods(root, as_of="2026-04-06")
 
         data = read_yaml(cls / "t" / "status.yaml")
         assert data["period"] == "2026-04"
@@ -366,9 +379,9 @@ class TestResetSideEffects:
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "t", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
-        run_check_periods(root, as_of="2026-05-05")
+        run_check_periods(root, as_of="2026-04-06")
 
         data = read_yaml(cls / "t" / "status.yaml")
         assert data["schema_version"] == 1
@@ -390,16 +403,16 @@ class TestMultiClass:
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls1, "t1", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
         cls2 = make_class(root, "reporting", manifest=[
             {"task": "t2", "order": 1, "enabled": True,
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls2, "t2", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
-        run_check_periods(root, as_of="2026-05-05")
+        run_check_periods(root, as_of="2026-04-06")
 
         assert read_yaml(cls1 / "t1" / "status.yaml")["status"] == "not_started"
         assert read_yaml(cls2 / "t2" / "status.yaml")["status"] == "not_started"
@@ -413,12 +426,12 @@ class TestMultiClass:
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "t", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
         # .claude already exists from make_context_root; add .git
         (root / ".git").mkdir(exist_ok=True)
 
-        result = run_check_periods(root, as_of="2026-05-05")
+        result = run_check_periods(root, as_of="2026-04-06")
         assert result.returncode == 0
 
 
@@ -462,11 +475,11 @@ class TestGitCommit:
              "period_format": "monthly", "anchor": "first_monday"},
         ])
         make_task(cls, "bank-fees", status="done", period="2026-03",
-                  done_at="2026-04-07T14:30:00Z")
+                  done_at="2026-04-05T14:30:00Z")
 
         self._git_init(root)
 
-        result = run_check_periods(root, as_of="2026-05-05")
+        result = run_check_periods(root, as_of="2026-04-06")
         assert result.returncode == 0
 
         # Verify a new commit was created with the expected message
@@ -506,3 +519,149 @@ class TestGitCommit:
         )
         after_count = int(after.stdout.strip())
         assert after_count == before_count
+
+
+# ---------------------------------------------------------------------------
+# Last-* anchors
+# ---------------------------------------------------------------------------
+
+
+class TestLastAnchors:
+    """Tests for last_* anchor types and weekend anchors."""
+
+    def test_last_friday_monthly(self, tmp_path):
+        """Monthly period 2026-03, anchor last_friday.
+        One-ahead: last Friday of April 2026 = April 24.
+        done_at Apr 20 (before anchor) → no guard.
+        as-of Apr 25 >= Apr 24 → triggers reset."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "t", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "last_friday"},
+        ])
+        make_task(cls, "t", status="done", period="2026-03",
+                  done_at="2026-04-20T14:30:00Z")
+
+        result = run_check_periods(root, as_of="2026-04-25")
+        assert result.returncode == 0
+
+        data = read_yaml(cls / "t" / "status.yaml")
+        assert data["status"] == "not_started"
+        assert data["period"] == "2026-04"
+
+    def test_last_monday_quarterly(self, tmp_path):
+        """Quarterly period 2026-Q1, anchor last_monday.
+        One-ahead: last Monday of Q2's final month (June 2026) = June 29.
+        done_at Apr 7 (before anchor) → no guard.
+        as-of June 29 → triggers reset."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "reporting", manifest=[
+            {"task": "t", "order": 1, "enabled": True,
+             "period_format": "quarterly", "anchor": "last_monday"},
+        ])
+        make_task(cls, "t", status="done", period="2026-Q1",
+                  done_at="2026-04-07T14:30:00Z")
+
+        result = run_check_periods(root, as_of="2026-06-29")
+        assert result.returncode == 0
+
+        data = read_yaml(cls / "t" / "status.yaml")
+        assert data["status"] == "not_started"
+        assert data["period"] == "2026-Q2"
+
+    def test_first_saturday_monthly(self, tmp_path):
+        """Monthly period 2026-03, anchor first_saturday.
+        One-ahead: first Saturday of April 2026 = April 4.
+        done_at Apr 3 (before anchor) → no guard.
+        as-of Apr 4 → triggers reset."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "t", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "first_saturday"},
+        ])
+        make_task(cls, "t", status="done", period="2026-03",
+                  done_at="2026-04-03T14:30:00Z")
+
+        result = run_check_periods(root, as_of="2026-04-04")
+        assert result.returncode == 0
+
+        data = read_yaml(cls / "t" / "status.yaml")
+        assert data["status"] == "not_started"
+        assert data["period"] == "2026-04"
+
+
+# ---------------------------------------------------------------------------
+# One-ahead anchor and late-completion guard
+# ---------------------------------------------------------------------------
+
+
+class TestOneAheadAnchor:
+    """Tests verifying one-ahead anchor logic and the late-completion guard."""
+
+    def test_anchor_is_one_period_ahead(self, tmp_path):
+        """Period 2026-03, first_monday. One-ahead anchor = first Monday of
+        April = April 6. done_at Apr 1 (before anchor). as-of Apr 6 triggers.
+        Period resets to 2026-04 (not 2026-05 as two-ahead would give)."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "t", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "first_monday"},
+        ])
+        make_task(cls, "t", status="done", period="2026-03",
+                  done_at="2026-04-01T14:30:00Z")
+
+        result = run_check_periods(root, as_of="2026-04-06")
+        assert result.returncode == 0
+
+        data = read_yaml(cls / "t" / "status.yaml")
+        assert data["status"] == "not_started"
+        assert data["period"] == "2026-04"
+
+    def test_late_completion_pushes_to_next_cycle(self, tmp_path):
+        """Period 2026-03, first_monday. Anchor = first Monday of April = Apr 6.
+        done_at Apr 20 (AFTER anchor) → late-completion guard fires.
+        Guard pushes next_per from 2026-04 to 2026-05 and anchor to
+        first Monday of May = May 4.
+        as-of Apr 25 < May 4 → does NOT trigger.
+        as-of May 4 >= May 4 → DOES trigger with period 2026-05."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "t", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "first_monday"},
+        ])
+        make_task(cls, "t", status="done", period="2026-03",
+                  done_at="2026-04-20T14:30:00Z")
+
+        # Before the pushed anchor — should NOT trigger
+        result = run_check_periods(root, as_of="2026-04-25")
+        assert result.returncode == 0
+        data = read_yaml(cls / "t" / "status.yaml")
+        assert data["status"] == "done"
+
+        # On the pushed anchor — SHOULD trigger
+        result = run_check_periods(root, as_of="2026-05-04")
+        assert result.returncode == 0
+        data = read_yaml(cls / "t" / "status.yaml")
+        assert data["status"] == "not_started"
+        assert data["period"] == "2026-05"
+
+    def test_late_completion_last_anchor(self, tmp_path):
+        """Period 2026-03, last_friday. Anchor = last Friday of April = Apr 24.
+        done_at Apr 30 (AFTER anchor) → late-completion guard fires.
+        Guard pushes next_per from 2026-04 to 2026-05 and anchor to
+        last Friday of May = May 29.
+        as-of May 29 → triggers with period 2026-05."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "t", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "last_friday"},
+        ])
+        make_task(cls, "t", status="done", period="2026-03",
+                  done_at="2026-04-30T14:30:00Z")
+
+        result = run_check_periods(root, as_of="2026-05-29")
+        assert result.returncode == 0
+
+        data = read_yaml(cls / "t" / "status.yaml")
+        assert data["status"] == "not_started"
+        assert data["period"] == "2026-05"

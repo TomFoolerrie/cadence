@@ -226,7 +226,7 @@ Subcommand-based interface:
 **Valid enums:**
 
 - `period-format`: `monthly`, `weekly`, `quarterly`, `adhoc`
-- `anchor`: `first_monday`, `first_tuesday`, `first_wednesday`, `first_thursday`, `first_friday`, `last_monday`, `last_tuesday`, `last_wednesday`, `last_thursday`, `last_friday`, `monday`, `tuesday`, `wednesday`, `thursday`, `friday`, `saturday`, `sunday`
+- `anchor`: `first_monday`, `first_tuesday`, `first_wednesday`, `first_thursday`, `first_friday`, `first_saturday`, `first_sunday`, `last_monday`, `last_tuesday`, `last_wednesday`, `last_thursday`, `last_friday`, `last_saturday`, `last_sunday`, `monday`, `tuesday`, `wednesday`, `thursday`, `friday`, `saturday`, `sunday`
 
 **Preconditions:**
 
@@ -415,9 +415,9 @@ Does **not** modify `status.yaml`. Status transitions are handled by skills via 
 
 ---
 
-## `install-deps.py`
+## `init-venv.py`
 
-**Purpose:** Installs Python dependencies from `requirements.txt` files, top-down through the hierarchy.
+**Purpose:** Creates a Python virtual environment at the engagement root. Idempotent — exits 0 if the venv already exists.
 
 **Arguments:** None.
 
@@ -430,15 +430,53 @@ Does **not** modify `status.yaml`. Status transitions are handled by skills via 
 **Behavior:**
 
 1. Walk up from cwd to engagement root (via `.context-root`).
-2. Determine the current level (root, class, or task) based on cwd position. Level detection: if cwd contains `SKILL.md` → task level; if cwd contains `.class.yaml` → class level; if cwd contains `.context-root` → root level.
-3. Install `requirements.txt` files top-down, skipping any that don't exist:
-   - Root: `pip install -r <root>/requirements.txt`
-   - Class (if at class or task level): `pip install -r <class>/requirements.txt`
-   - Task (if at task level): `pip install -r <task>/requirements.txt`
+2. Check if `<root>/venv/bin/python` exists — if yes, exit 0 (idempotent).
+3. Create venv: `python -m venv <root>/venv`.
 
-Runs on Cowork VM using system Python. Dependencies install globally within the VM.
+Unix-only paths (`venv/bin/`). Windows would use `venv/Scripts/`.
 
-**File writes:** None (pip installs packages to system Python, not to the hierarchy).
+**File writes:** Creates `<root>/venv/` directory with a standard Python virtual environment.
+
+**Stdout:** None on success. Error message on failure (to stderr).
+
+**Idempotent:** Yes — exits 0 if venv already exists.
+
+**Exit codes:**
+
+| Code | Condition |
+|------|-----------|
+| 0 | Venv created or already exists |
+| 1 | No `.context-root` found |
+| 2 | Venv creation failed |
+
+---
+
+## `install-deps.py`
+
+**Purpose:** Installs Python dependencies from `requirements.txt` files into the engagement venv, top-down through the hierarchy.
+
+**Arguments:** None.
+
+**Preconditions:**
+
+| Condition | Check | On failure |
+|-----------|-------|------------|
+| `.context-root` exists in an ancestor directory | Walk up from cwd | Exit 1: `"No .context-root found in any ancestor directory"` |
+| Engagement venv exists | `<root>/venv/bin/pip` exists | Exit 2: `"No venv found at <root>/venv/ — run init-venv.py first"` |
+
+**Behavior:**
+
+1. Walk up from cwd to engagement root (via `.context-root`).
+2. Resolve venv pip at `<root>/venv/bin/pip`. If not found, exit 2.
+3. Determine the current level (root, class, or task) based on cwd position. Level detection: if cwd contains `SKILL.md` → task level; if cwd contains `.class.yaml` → class level; if cwd contains `.context-root` → root level.
+4. Install `requirements.txt` files top-down using the venv pip, skipping any that don't exist:
+   - Root: `<root>/venv/bin/pip install -r <root>/requirements.txt`
+   - Class (if at class or task level): `<root>/venv/bin/pip install -r <class>/requirements.txt`
+   - Task (if at task level): `<root>/venv/bin/pip install -r <task>/requirements.txt`
+
+Dependencies install into the engagement venv, not system Python.
+
+**File writes:** None (pip installs packages into the venv, not to the hierarchy).
 
 **Stdout:** pip output (installation progress, already-satisfied messages).
 
@@ -450,7 +488,7 @@ Runs on Cowork VM using system Python. Dependencies install globally within the 
 |------|-----------|
 | 0 | All requirements installed (or already satisfied) |
 | 1 | No `.context-root` found |
-| 2 | pip install failed (network error, package not found, version conflict) |
+| 2 | No venv found, or pip install failed (network error, package not found, version conflict) |
 
 ---
 
@@ -474,10 +512,11 @@ Runs on Cowork VM using system Python. Dependencies install globally within the 
 
 **Behavior:**
 
-Runs four scripts in sequence from the current (task) directory:
+Runs five scripts in sequence from the current (task) directory:
 
 1. **`set-status.py in_progress [--period <period>]`** — Transitions to `in_progress`. Only passes `--period` when current status is `not_started` and the period field is empty. For `in_progress` (crash recovery) and `review_ready` (rejected draft), omits `--period`.
-2. **`install-deps.py`** — Installs `requirements.txt` files top-down.
+1.5. **`init-venv.py`** — Creates the engagement venv if it doesn't exist (idempotent).
+2. **`install-deps.py`** — Installs `requirements.txt` files top-down into the engagement venv.
 3. **`init-period.py <period>`** — Scaffolds the period directory. Skipped if `periods/<period>/` already exists (crash recovery, re-execution).
 4. **`load-context.py --level task`** — Loads the full context chain.
 
@@ -507,11 +546,103 @@ Runs four scripts in sequence from the current (task) directory:
 
 ---
 
+## `onboard-setup.py`
+
+**Purpose:** Setup phase for the `/onboard` skill (task-level). Wraps load-context and init-task into a single script call so the agent handles one exit code instead of two.
+
+**Arguments:**
+
+| Argument | Position | Required | Values |
+|----------|----------|----------|--------|
+| `task-name` | 1 | Yes | Kebab-case task name |
+
+**Preconditions:**
+
+| Condition | Check | On failure |
+|-----------|-------|------------|
+| cwd contains `.class.yaml` | File exists | Exit 1: `"Not in a class directory (no .class.yaml)"` |
+
+**Behavior:**
+
+Runs two scripts in sequence from the current (class) directory:
+
+1. **`load-context.py --level class`** — Loads root AGENT.md and class AGENT.md.
+2. **`init-task.py <task-name>`** — Scaffolds the task directory.
+
+If `load-context.py` fails, `init-task.py` is not run (no partial state).
+
+**File writes:** Task directory structure (via `init-task.py`): `<task-name>/SKILL.md`, `learned.md`, `reference.md`, `status.yaml`, `tools/`, `periods/`, `requirements.txt`, `.claude/settings.json`.
+
+**Stdout:** `load-context.py` output on success (the context payload for the agent). No output on failure.
+
+**Idempotent:** No — `init-task.py` exits with error if the task directory exists.
+
+**Exit codes:**
+
+| Code | Condition |
+|------|-----------|
+| 0 | Setup complete, context printed to stdout |
+| 1 | Precondition error (no `.class.yaml`, task already exists, no args) |
+| 2 | System error (load-context failure) |
+
+---
+
+## `onboard-register.py`
+
+**Purpose:** Registration phase for the `/onboard` skill. Wraps init-venv, install-deps, and edit-class-yaml (add-task + optional set-description) into a single script call.
+
+**Arguments:**
+
+| Argument | Position | Required | Values |
+|----------|----------|----------|--------|
+| `task-name` | 1 | Yes | Kebab-case task name |
+| `--order` | Named | Yes | Positive integer — execution order |
+| `--period-format` | Named | No | `monthly`, `weekly`, `quarterly`, `adhoc` (default: `monthly`) |
+| `--anchor` | Named | No | Anchor value (default: `first_monday`) |
+| `--description` | Named | No | Class description text (optional) |
+
+**Preconditions:**
+
+| Condition | Check | On failure |
+|-----------|-------|------------|
+| cwd contains `.class.yaml` | File exists | Exit 1: `"Not in a class directory (no .class.yaml)"` |
+| `<task-name>/` directory exists | Directory check | Exit 1: `"Task directory '<task-name>' does not exist"` |
+| `<task-name>/SKILL.md` exists | File check | Exit 1: `"Task directory '<task-name>' has no SKILL.md"` |
+
+**Behavior:**
+
+Runs scripts in sequence from the current (class) directory:
+
+1. **`init-venv.py`** — Creates the engagement venv if it doesn't exist (idempotent).
+2. **`install-deps.py`** — Installs requirements.txt files top-down. Runs with `cwd` set to the task directory so it detects task level.
+3. **`edit-class-yaml.py add-task <task-name> --order N --period-format fmt --anchor anchor`** — Adds the task to the manifest.
+4. **`edit-class-yaml.py set-description "<description>"`** — Only if `--description` is provided. **Non-fatal on failure** — prints a warning to stderr but still exits 0.
+
+**File writes:** `.class.yaml` (via `edit-class-yaml.py`). Venv directory (via `init-venv.py`). Package installations (via `install-deps.py`).
+
+**Stdout:** None on success. Error/warning messages on stderr.
+
+**Idempotent:** No — `edit-class-yaml.py add-task` rejects duplicates.
+
+**Exit codes:**
+
+| Code | Condition |
+|------|-----------|
+| 0 | Task registered (description failure is non-fatal) |
+| 1 | Precondition error (no `.class.yaml`, task dir missing, no SKILL.md, invalid manifest args) |
+| 2 | System error (venv, install, or manifest failure) |
+
+---
+
 ## `check-periods.py`
 
 **Purpose:** Scheduled infrastructure script. Walks the hierarchy and resets terminal tasks whose next anchor date has arrived. Runs as a cron job — no agent session.
 
-**Arguments:** None.
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `--as-of <YYYY-MM-DD>` | No | Override today's date. Used by the test suite to simulate future dates without waiting for real time to pass. |
 
 **Preconditions:**
 
@@ -529,22 +660,26 @@ For each class in engagement root (identified by immediate subdirectories contai
     Skip if status is not terminal (done or abandoned)
     Read done_at from status.yaml
     Read anchor and period_format from .class.yaml manifest
-    Compute next_anchor_date:
-      monthly  + first_monday  → first Monday of the month after current period
-      monthly  + first_tuesday → first Tuesday of the month after current period
-      ...
-      weekly   + monday        → next Monday after done_at
-      quarterly + first_monday → first Monday of the quarter after current period
-      adhoc                    → skip (cannot auto-compute)
-    If today >= next_anchor_date:
-      Compute next_period_string (handle year rollover):
-        monthly:   YYYY-MM incremented (2026-03 → 2026-04, 2026-12 → 2027-01)
-        weekly:    YYYY-WNN incremented (2026-W12 → 2026-W13, 2026-W52 → 2027-W01)
-        quarterly: YYYY-QN incremented (2026-Q1 → 2026-Q2, 2026-Q4 → 2027-Q1)
+    Compute next_per = next_period_string(current_period) (handle year rollover):
+      monthly:   YYYY-MM incremented (2026-03 → 2026-04, 2026-12 → 2027-01)
+      weekly:    YYYY-WNN incremented (2026-W12 → 2026-W13, 2026-W52 → 2027-W01)
+      quarterly: YYYY-QN incremented (2026-Q1 → 2026-Q2, 2026-Q4 → 2027-Q1)
       Note: ISO week numbering — some years have W53. Implementers must use
       proper date arithmetic, not string manipulation.
+    Compute anchor_date (one-ahead logic):
+      monthly  + first_<weekday>  → first <weekday> of the NEXT period's month
+      monthly  + last_<weekday>   → last <weekday> of the NEXT period's month
+      quarterly + first_<weekday> → first <weekday> of first month of NEXT quarter
+      quarterly + last_<weekday>  → last <weekday> of final month of NEXT quarter
+      weekly   + <weekday>        → that weekday of the next ISO week
+      adhoc                       → skip (cannot auto-compute)
+    Late-completion guard:
+      If anchor_date <= done_at (task finished after the anchor already passed):
+        Advance next_per by one more period
+        Recompute anchor_date for the new next_per
+    If today >= anchor_date:
       Write status.yaml:
-        period: <next_period_string>
+        period: <next_per>
         status: not_started
         issues: []
         done_at: null

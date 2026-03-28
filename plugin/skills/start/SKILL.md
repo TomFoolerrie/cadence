@@ -70,14 +70,11 @@ Do not continue to Step 1.
 
 ## Step 1 — Setup
 
-Determine the period string. The period is the **period being closed**, not the current calendar period (e.g., if today is April, the period for a monthly task is `2026-03`).
+Determine the period string. The period is a label for the work being done in this cycle.
 
 - If `status.yaml` already has a non-empty `period` field (normal case — set by `check-periods.py` on reset, or crash recovery / rejected draft): no `--period` needed.
 - If `period` is empty AND `period_format` is `adhoc`: ask the user for the period string.
-- If `period` is empty AND `period_format` is not `adhoc`: compute the period being closed from the current date:
-  - `monthly` — use the previous month (e.g., if today is 2026-04-07, period is `2026-03`)
-  - `quarterly` — use the previous quarter (e.g., if today is 2026-04-07, period is `2026-Q1`)
-  - `weekly` — use the previous week
+- If `period` is empty AND `period_format` is not `adhoc`: ask the user for the period string (e.g., `2026-03` for monthly, `2026-Q1` for quarterly, `2026-W12` for weekly).
 
 Then run the setup wrapper:
 
@@ -96,6 +93,8 @@ This runs four scripts atomically: sets status to `in_progress`, installs depend
   ```
 
 ## Step 2 — Execute
+
+Before running task tools, ensure the engagement venv is active. The venv is at `<root>/venv/` where `<root>` is the engagement root containing `.context-root`. Activate it with `source <root>/venv/bin/activate`.
 
 Read `SKILL.md` and `learned.md` from the loaded context.
 
