@@ -20,9 +20,10 @@ venv/
 
 # Dry run output
 engagement-template-dry-run/
+engagement-template dry-run-v2-artifact/
 
 # Notes
-notes/
+notes/working.md
 
 # Plugin archive
 plugin.zip
