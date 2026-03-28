@@ -4,7 +4,7 @@ Read `README.md` first for project orientation and architecture overview.
 
 ## Dev Environment
 - Python virtualenv at `venv/` — activate with `source venv/bin/activate`
-- Run tests: `python -m pytest tests/` (265 tests must pass)
+- Run tests: `python -m pytest tests/` (299 tests must pass)
 - `.claude/settings.local.json` has project-level permissions (WebSearch, WebFetch for agentic-design.ai only)
 
 ## Source of Truth

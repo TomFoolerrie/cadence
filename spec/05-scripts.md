@@ -104,6 +104,9 @@ Prints each file with section headers. Order is always top-down (root first, tas
 ── status.yaml ──
 <contents of status.yaml>
 
+── reference.md ──
+<contents of reference.md (write restrictions, script docs)>
+
 ── tools ──
 task:   treasury/monthly-bank-fees/tools/
 class:  treasury/tools/
