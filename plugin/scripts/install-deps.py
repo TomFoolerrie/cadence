@@ -9,7 +9,7 @@ from typing import Optional
 
 def find_context_root(start: Path) -> Optional[Path]:
     """Walk up from start to find the directory containing .context-root."""
-    current = start.resolve()
+    current = start.absolute()
     while True:
         if (current / ".context-root").exists():
             return current
@@ -61,11 +61,18 @@ def main() -> int:
         print("No .context-root found in any ancestor directory", file=sys.stderr)
         return 1
 
-    # Resolve venv pip
+    # Resolve pip — prefer venv, fall back to system pip
     venv_pip = root / "venv" / "bin" / "pip"
     if not venv_pip.exists():
-        print(f"No venv found at {root}/venv/ — run init-venv.py first", file=sys.stderr)
-        return 2
+        # No venv available (e.g., sandbox environment) — fall back to system pip
+        import shutil
+        system_pip = shutil.which("pip") or shutil.which("pip3")
+        if system_pip:
+            venv_pip = Path(system_pip)
+            print(f"No venv found — using system pip: {system_pip}", file=sys.stderr)
+        else:
+            print(f"No venv found at {root}/venv/ and no system pip available", file=sys.stderr)
+            return 2
 
     # Determine level
     level = detect_level(cwd)

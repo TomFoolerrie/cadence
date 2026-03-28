@@ -86,13 +86,12 @@ def main() -> int:
         print(result.stderr.strip(), file=sys.stderr)
         return result.returncode
 
-    # --- Step 1.5: init-venv.py (idempotent) ---
+    # --- Step 1.5: init-venv.py (idempotent, non-fatal in sandbox environments) ---
     result = _run_script("init-venv.py", [])
     if result.returncode != 0:
-        error_msg = result.stderr.strip() or "init-venv.py failed"
-        _set_blocked(error_msg)
-        print(error_msg, file=sys.stderr)
-        return 2
+        warning = result.stderr.strip() or "init-venv.py failed"
+        print(f"Warning: venv init skipped: {warning}", file=sys.stderr)
+        # Non-fatal — install-deps will fall back to system pip
 
     # --- Step 2: install-deps.py ---
     result = _run_script("install-deps.py", [])

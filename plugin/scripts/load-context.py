@@ -25,7 +25,7 @@ import yaml
 
 def find_context_root(start: Path) -> Optional[Path]:
     """Walk up from *start* looking for a directory containing .context-root."""
-    current = start.resolve()
+    current = start.absolute()
     while True:
         if (current / ".context-root").exists():
             return current
@@ -38,8 +38,8 @@ def find_context_root(start: Path) -> Optional[Path]:
 def find_class_dir(start: Path, root: Path) -> Optional[Path]:
     """Walk up from *start* (inclusive) looking for a directory with .class.yaml,
     stopping at (and including) *root*."""
-    current = start.resolve()
-    root = root.resolve()
+    current = start.absolute()
+    root = root.absolute()
     while True:
         if (current / ".class.yaml").exists():
             return current
@@ -138,7 +138,7 @@ def main() -> int:
     # but the spec says "cwd has SKILL.md").
     # We also need to find the task dir — walk up from cwd looking for SKILL.md
     task_dir = None
-    search = cwd.resolve()
+    search = cwd.absolute()
     while True:
         if (search / "SKILL.md").exists():
             task_dir = search

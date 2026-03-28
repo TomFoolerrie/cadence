@@ -148,23 +148,15 @@ Cover each topic below. Write answers to the indicated file and section as you g
 - Capture the implicit. Ask: *"Is there anything you do automatically that you haven't mentioned?"* and *"What would a new hire get wrong the first time?"*
 - Be token-conscious. SKILL.md and learned.md are loaded every period. Keep them focused. Do not duplicate information between sections.
 
-### Step 4 — Check Existing Tools
-
-Before writing new tools, check what already exists:
-
-- `.claude/tools/` -- global tools (JE formatter, PDF parser)
-- `{class}/tools/` -- class-level tools
-
-Reuse what you can. If multiple tasks would parse the same source format, that parser belongs at the class level. Only build task-level tools for logic unique to this task.
-
-### Step 5 — Build Files
+### Step 4 — Build Files
 
 Write the files based on the interview:
 
 - **SKILL.md** -- Populate all sections from the template. The `## Procedure` section must reference tools by path and use standard period directories: source files go in `periods/{period}/data/`, outputs go in `periods/{period}/workpapers/`. Do not use custom directory names.
 - **learned.md** -- Seed with what the preparer shared about quirks, expected ranges, and known failure modes. Use the four-section structure: Review History, Patterns, What Didn't Work, Open Questions.
-- **tools/** -- Build the Python scripts that do transformation and validation work. Ensure all tool output paths default to the standard period subdirectories.
 - **requirements.txt** -- Add task-specific Python dependencies. Check class-level and root-level requirements.txt first -- do not duplicate.
+
+**Do not build tools yet.** Tools are built in Step 7b after the user provides real data. Building tools without seeing actual data leads to incorrect assumptions about formats and structure.
 
 ### Step 6 — Register Task
 
@@ -205,9 +197,17 @@ This sets status to `in_progress`, installs deps, scaffolds the period directory
 
 Before running engagement tools, activate the venv: `source <root>/venv/bin/activate` where `<root>` is the engagement root containing `.context-root`.
 
-Follow the `## Procedure` section of SKILL.md:
+Ask the user to provide source data files. Place them in `periods/{period}/data/`.
 
-- Ask the user to provide source data files. Place them in `periods/{period}/data/`.
+**Now build tools.** With real data in hand, check what tools already exist:
+
+- `.claude/tools/` -- global tools (JE formatter, PDF parser)
+- `{class}/tools/` -- class-level tools
+
+Reuse what you can. If multiple tasks would parse the same source format, that parser belongs at the class level. Only build task-level tools in `tools/` for logic unique to this task. Ensure all tool output paths default to the standard period subdirectories.
+
+Then follow the `## Procedure` section of SKILL.md:
+
 - All outputs go in `periods/{period}/workpapers/`.
 - Reference tools by path: task `tools/` → class `tools/` → global `.claude/tools/`.
 - Check `## Validation` and `## Completion Criteria` — output must satisfy these before setting `review_ready`.

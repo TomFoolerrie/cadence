@@ -53,12 +53,12 @@ def main() -> int:
         print(f"Task directory '{task_name}' has no SKILL.md", file=sys.stderr)
         return 1
 
-    # --- Step 1: init-venv.py (idempotent) ---
+    # --- Step 1: init-venv.py (idempotent, non-fatal in sandbox environments) ---
     result = _run_script("init-venv.py", [])
     if result.returncode != 0:
-        error_msg = result.stderr.strip() or "init-venv.py failed"
-        print(error_msg, file=sys.stderr)
-        return 2
+        warning = result.stderr.strip() or "init-venv.py failed"
+        print(f"Warning: venv init skipped: {warning}", file=sys.stderr)
+        # Non-fatal — install-deps will fall back to system pip
 
     # --- Step 2: install-deps.py (cwd = task directory) ---
     result = _run_script("install-deps.py", [], cwd=str(task_dir))

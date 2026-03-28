@@ -111,9 +111,11 @@ class TestPreconditions:
         assert result.returncode == 1
         assert "No .context-root found" in result.stderr
 
-    def test_exit_2_no_venv(self, tmp_path):
-        """Exits 2 when no venv exists at the engagement root."""
+    def test_falls_back_to_system_pip_when_no_venv(self, tmp_path):
+        """Falls back to system pip when no venv exists (sandbox mode)."""
         root = make_context_root(tmp_path)
         result = run_install_deps(root)
-        assert result.returncode == 2
+        # Should succeed using system pip, not fail
+        assert result.returncode == 0
         assert "No venv found" in result.stderr
+        assert "using system pip" in result.stderr

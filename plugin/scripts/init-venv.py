@@ -15,7 +15,7 @@ from typing import Optional
 
 def find_context_root(start: Path) -> Optional[Path]:
     """Walk up from start to find the directory containing .context-root."""
-    current = start.resolve()
+    current = start.absolute()
     while True:
         if (current / ".context-root").exists():
             return current
