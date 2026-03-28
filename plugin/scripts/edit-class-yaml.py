@@ -24,9 +24,24 @@ VALID_PERIOD_FORMATS = {"monthly", "weekly", "quarterly", "adhoc"}
 
 VALID_ANCHORS = {
     "first_monday", "first_tuesday", "first_wednesday", "first_thursday", "first_friday",
+    "first_saturday", "first_sunday",
     "last_monday", "last_tuesday", "last_wednesday", "last_thursday", "last_friday",
+    "last_saturday", "last_sunday",
     "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
 }
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+
+class ScriptValidationError(Exception):
+    """Raised for validation failures (exit 1)."""
+
+
+class ScriptSystemError(Exception):
+    """Raised for system errors like corrupt YAML or filesystem failures (exit 2)."""
 
 
 # ---------------------------------------------------------------------------
@@ -35,25 +50,21 @@ VALID_ANCHORS = {
 
 
 def load_class_yaml():
-    """Load and validate .class.yaml from cwd. Exits on failure."""
+    """Load and validate .class.yaml from cwd. Raises on failure."""
     class_path = Path.cwd() / ".class.yaml"
 
     if not class_path.exists():
-        print("No .class.yaml in current directory", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError("No .class.yaml in current directory")
 
     try:
         with open(class_path) as f:
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
-            print("Corrupt .class.yaml", file=sys.stderr)
-            sys.exit(2)
+            raise ScriptSystemError("Corrupt .class.yaml")
         if "manifest" not in data or not isinstance(data["manifest"], list):
-            print("Corrupt .class.yaml: missing manifest", file=sys.stderr)
-            sys.exit(2)
+            raise ScriptSystemError("Corrupt .class.yaml: missing manifest")
     except yaml.YAMLError:
-        print("Corrupt .class.yaml", file=sys.stderr)
-        sys.exit(2)
+        raise ScriptSystemError("Corrupt .class.yaml")
 
     return class_path, data
 
@@ -64,8 +75,7 @@ def save_class_yaml(class_path, data):
         with open(class_path, "w") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     except OSError as e:
-        print(f"Filesystem error: {e}", file=sys.stderr)
-        sys.exit(2)
+        raise ScriptSystemError(f"Filesystem error: {e}")
 
 
 def find_task_index(manifest, task_name):
@@ -93,30 +103,24 @@ def cmd_add_task(args):
 
     # Validate task not already in manifest
     if find_task_index(manifest, args.task) != -1:
-        print(f"Task '{args.task}' already in manifest", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError(f"Task '{args.task}' already in manifest")
 
     # Validate task directory exists with SKILL.md
     task_dir = Path.cwd() / args.task
     if not task_dir.is_dir():
-        print(f"Task directory '{args.task}' does not exist", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError(f"Task directory '{args.task}' does not exist")
     if not (task_dir / "SKILL.md").is_file():
-        print(f"Task directory '{args.task}' has no SKILL.md", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError(f"Task directory '{args.task}' has no SKILL.md")
 
     # Validate order
     if args.order <= 0:
-        print("--order must be a positive integer", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError("--order must be a positive integer")
 
     # Validate enums
     if args.period_format not in VALID_PERIOD_FORMATS:
-        print(f"Invalid period-format: '{args.period_format}'", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError(f"Invalid period-format: '{args.period_format}'")
     if args.anchor not in VALID_ANCHORS:
-        print(f"Invalid anchor: '{args.anchor}'", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError(f"Invalid anchor: '{args.anchor}'")
 
     # Build entry with all fields explicit
     entry = {
@@ -136,8 +140,7 @@ def cmd_update_task(args):
 
     idx = find_task_index(manifest, args.task)
     if idx == -1:
-        print(f"Task '{args.task}' not in manifest", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError(f"Task '{args.task}' not in manifest")
 
     # Check at least one field provided
     has_update = False
@@ -151,15 +154,13 @@ def cmd_update_task(args):
         has_update = True
 
     if not has_update:
-        print("No fields provided to update", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError("No fields provided to update")
 
     entry = manifest[idx]
 
     if args.order is not None:
         if args.order <= 0:
-            print("--order must be a positive integer", file=sys.stderr)
-            sys.exit(1)
+            raise ScriptValidationError("--order must be a positive integer")
         entry["order"] = args.order
 
     if args.enabled is not None:
@@ -167,14 +168,12 @@ def cmd_update_task(args):
 
     if args.period_format is not None:
         if args.period_format not in VALID_PERIOD_FORMATS:
-            print(f"Invalid period-format: '{args.period_format}'", file=sys.stderr)
-            sys.exit(1)
+            raise ScriptValidationError(f"Invalid period-format: '{args.period_format}'")
         entry["period_format"] = args.period_format
 
     if args.anchor is not None:
         if args.anchor not in VALID_ANCHORS:
-            print(f"Invalid anchor: '{args.anchor}'", file=sys.stderr)
-            sys.exit(1)
+            raise ScriptValidationError(f"Invalid anchor: '{args.anchor}'")
         entry["anchor"] = args.anchor
 
     save_class_yaml(class_path, data)
@@ -186,8 +185,7 @@ def cmd_remove_task(args):
 
     idx = find_task_index(manifest, args.task)
     if idx == -1:
-        print(f"Task '{args.task}' not in manifest", file=sys.stderr)
-        sys.exit(1)
+        raise ScriptValidationError(f"Task '{args.task}' not in manifest")
 
     manifest.pop(idx)
     save_class_yaml(class_path, data)
@@ -198,7 +196,7 @@ def cmd_remove_task(args):
 # ---------------------------------------------------------------------------
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Edit .class.yaml")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -240,15 +238,24 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "set-description":
-        cmd_set_description(args)
-    elif args.command == "add-task":
-        cmd_add_task(args)
-    elif args.command == "update-task":
-        cmd_update_task(args)
-    elif args.command == "remove-task":
-        cmd_remove_task(args)
+    try:
+        if args.command == "set-description":
+            cmd_set_description(args)
+        elif args.command == "add-task":
+            cmd_add_task(args)
+        elif args.command == "update-task":
+            cmd_update_task(args)
+        elif args.command == "remove-task":
+            cmd_remove_task(args)
+    except ScriptValidationError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    except ScriptSystemError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

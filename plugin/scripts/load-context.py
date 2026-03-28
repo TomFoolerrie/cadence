@@ -166,6 +166,11 @@ def main() -> int:
     status_content = read_file(task_dir / "status.yaml")
     output_parts.append(section("status.yaml", status_content))
 
+    # reference.md (write restrictions and script docs)
+    reference_content = read_file(task_dir / "reference.md")
+    if reference_content:
+        output_parts.append(section("reference.md", reference_content))
+
     # Recovery hint if blocked
     try:
         with open(task_dir / "status.yaml") as f:

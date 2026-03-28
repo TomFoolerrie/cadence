@@ -32,7 +32,7 @@ VALID_TRANSITIONS = {
 REQUIRES_REASON = {"blocked", "abandoned"}
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Set task status")
     parser.add_argument("status", help="Target status")
     parser.add_argument("reason", nargs="?", default=None, help="Reason (required for blocked/abandoned)")
@@ -47,7 +47,7 @@ def main():
     status_path = Path.cwd() / "status.yaml"
     if not status_path.exists():
         print("No status.yaml in current directory", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     # --- Precondition: valid YAML ---
     try:
@@ -55,31 +55,31 @@ def main():
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
             print("Corrupt status.yaml", file=sys.stderr)
-            sys.exit(2)
+            return 2
     except yaml.YAMLError:
         print("Corrupt status.yaml", file=sys.stderr)
-        sys.exit(2)
+        return 2
 
     current_status = data.get("status")
 
     # --- Precondition: reason required for blocked/abandoned ---
     if new_status in REQUIRES_REASON and not reason:
         print("Reason required for blocked/abandoned status", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     # --- Precondition: --period only valid on not_started -> in_progress ---
     if period is not None and not (current_status == "not_started" and new_status == "in_progress"):
         print("--period is only valid on not_started \u2192 in_progress", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     # --- Precondition: legal transition ---
     if (current_status, new_status) not in VALID_TRANSITIONS:
         print(f"Invalid transition: {current_status} \u2192 {new_status}", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     # --- in_progress -> in_progress is a no-op ---
     if current_status == "in_progress" and new_status == "in_progress":
-        sys.exit(0)
+        return 0
 
     # --- Apply transition ---
     if new_status == "in_progress" and current_status == "not_started":
@@ -120,8 +120,10 @@ def main():
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     except OSError as e:
         print(f"Filesystem error: {e}", file=sys.stderr)
-        sys.exit(2)
+        return 2
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

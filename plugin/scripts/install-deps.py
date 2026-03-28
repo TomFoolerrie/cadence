@@ -38,23 +38,34 @@ def should_install(req_path: Path) -> bool:
     return len(content) > 0
 
 
-def install_requirements(req_path: Path) -> int:
+def install_requirements(req_path: Path, venv_pip: Path) -> int:
     """Run pip install -r for the given requirements.txt. Returns the return code."""
+    print(f"Installing {req_path} ...")
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-r", str(req_path)],
-        capture_output=False,
+        [str(venv_pip), "install", "-q", "-r", str(req_path)],
+        capture_output=True,
+        text=True,
     )
+    if result.returncode != 0:
+        print(result.stdout, file=sys.stderr)
+        print(result.stderr, file=sys.stderr)
     return result.returncode
 
 
-def main():
+def main() -> int:
     cwd = Path.cwd()
 
     # Find context root
     root = find_context_root(cwd)
     if root is None:
         print("No .context-root found in any ancestor directory", file=sys.stderr)
-        sys.exit(1)
+        return 1
+
+    # Resolve venv pip
+    venv_pip = root / "venv" / "bin" / "pip"
+    if not venv_pip.exists():
+        print(f"No venv found at {root}/venv/ — run init-venv.py first", file=sys.stderr)
+        return 2
 
     # Determine level
     level = detect_level(cwd)
@@ -76,13 +87,13 @@ def main():
     for req_path in req_paths:
         if not should_install(req_path):
             continue
-        rc = install_requirements(req_path)
+        rc = install_requirements(req_path, venv_pip)
         if rc != 0:
             print(f"pip install failed for {req_path}", file=sys.stderr)
-            sys.exit(2)
+            return 2
 
-    sys.exit(0)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

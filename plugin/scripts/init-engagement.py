@@ -30,6 +30,7 @@ GITIGNORE_CONTENT = """\
 **/periods/*/workpapers/
 .context-cache/
 .DS_Store
+venv/
 """
 
 
@@ -60,6 +61,17 @@ def main() -> int:
     engagement_name = args.name if args.name else derive_name(args.path)
 
     # --- Preconditions ---
+
+    # Check git availability before writing any files (side-effect guarantee)
+    try:
+        subprocess.run(
+            ["git", "--version"],
+            capture_output=True,
+            check=True,
+        )
+    except FileNotFoundError:
+        print("git is not available", file=sys.stderr)
+        return 2
 
     if target.exists():
         print(f"Path already exists: {target}", file=sys.stderr)
@@ -136,6 +148,19 @@ def main() -> int:
     except subprocess.CalledProcessError as exc:
         print(f"git error: {exc.stderr.strip()}", file=sys.stderr)
         return 2
+
+    # Create engagement venv
+    try:
+        subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parent / "init-venv.py")],
+            cwd=str(target),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(f"Warning: venv creation failed: {exc.stderr.strip()}", file=sys.stderr)
+        # Non-fatal — engagement is usable without venv
 
     return 0
 

@@ -33,14 +33,14 @@ def find_context_root(start: Path) -> Optional[Path]:
         current = parent
 
 
-def main():
+def main() -> int:
     cwd = Path.cwd()
 
     # --- Precondition: status.yaml exists ---
     status_path = cwd / "status.yaml"
     if not status_path.exists():
         print("No status.yaml in current directory", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     # --- Read status.yaml ---
     try:
@@ -48,10 +48,10 @@ def main():
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
             print("Corrupt status.yaml", file=sys.stderr)
-            sys.exit(1)
+            return 1
     except yaml.YAMLError:
         print("Corrupt status.yaml", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     current_status = data.get("status", "")
     period = data.get("period", "")
@@ -59,13 +59,13 @@ def main():
     # --- Precondition: status must be done ---
     if current_status != "done":
         print(f"Status must be done (current: {current_status})", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     # --- Precondition: .context-root exists ---
     root = find_context_root(cwd)
     if root is None:
         print("No .context-root found", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     # --- Read engagement name ---
     with open(root / ".context-root") as f:
@@ -94,8 +94,12 @@ def main():
 
     if not drive_configured:
         print("No Google Drive connected", file=sys.stderr)
-        sys.exit(2)
+        return 2
+
+    # --- Upload not yet implemented ---
+    print("Archive not yet implemented \u2014 skipping upload", file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

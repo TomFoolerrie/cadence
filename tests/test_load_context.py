@@ -260,3 +260,28 @@ class TestPreconditions:
         result = run_load_context(tmp_path, "root")
         assert result.returncode == 1
         assert "missing engagement key" in result.stderr.lower()
+
+
+# ---------------------------------------------------------------------------
+# reference.md inclusion
+# ---------------------------------------------------------------------------
+
+
+class TestReferenceMd:
+    """reference.md is included at task level only."""
+
+    def test_task_level_includes_reference_md(self, task_dir):
+        result = run_load_context(task_dir, "task")
+        assert result.returncode == 0
+        assert "\u2500\u2500 reference.md \u2500\u2500" in result.stdout
+        assert "Write Restrictions" in result.stdout
+
+    def test_root_level_excludes_reference_md(self, engagement_root):
+        result = run_load_context(engagement_root, "root")
+        assert result.returncode == 0
+        assert "reference.md" not in result.stdout
+
+    def test_class_level_excludes_reference_md(self, class_dir):
+        result = run_load_context(class_dir, "class")
+        assert result.returncode == 0
+        assert "reference.md" not in result.stdout
