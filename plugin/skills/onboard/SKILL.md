@@ -94,37 +94,47 @@ Map to kebab-case (e.g., "Monthly bank fees" → `monthly-bank-fees`).
 python ${CLAUDE_PLUGIN_ROOT}/scripts/init-task.py <name>
 ```
 
-### Step 5 — Write Task Files
+### Step 5 — Write Procedure Files
 
 Based on the interview, write:
 
 - **`<name>/SKILL.md`** — The step-by-step procedure. Outputs go in `periods/{period}/workpapers/`, source data in `periods/{period}/data/`.
 - **`<name>/learned.md`** — Known patterns, expected ranges, failure modes.
-- **`<name>/tools/`** — Any automation scripts needed.
+
+**Do NOT build tools yet.** Wait until you have real data in Step 7.
+
+### Step 6 — First Period Setup
+
+Ask the user: *"What period is this for?"* (e.g., `2026-03`)
+
+Scaffold the period:
+
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>
+```
+
+Ask the user to provide real source data. Place it in `periods/<period>/data/`.
+
+### Step 7 — Build Tools from Real Data
+
+Now that you have actual data, build any automation scripts needed:
+
+- **`<name>/tools/`** — Scripts that process the real data format.
 - **`<name>/requirements.txt`** — Python dependencies for tools.
-
-Keep SKILL.md and learned.md focused — they are loaded every period.
-
-### Step 6 — Install Dependencies
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.py
 ```
 
-### Step 7 — First Period Execution
-
-Ask the user: *"What period is this for?"* (e.g., `2026-03`)
-
-Scaffold and load context:
+### Step 8 — Execute First Period
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>
 python ${CLAUDE_PLUGIN_ROOT}/scripts/load-context.py --level task
 ```
 
 Execute the procedure from SKILL.md. Place outputs in `periods/<period>/workpapers/`.
 
-### Step 8 — Commit
+### Step 9 — Commit
 
 ```bash
 git add -A && git commit -m "[onboard] Add task: <name>"
