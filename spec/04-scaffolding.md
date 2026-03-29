@@ -8,14 +8,8 @@ The hierarchy is created once and then managed through conversation. The plugin 
 accounting-plugin/
 ├── .claude-plugin/
 │   └── plugin.json
-├── engagement-template/            ← copied to user's folder
-│   ├── .context-root               ← root marker (YAML: engagement name + schema_version)
-│   ├── AGENT.md                    ← root context template (user fills in)
-│   ├── .claude/
-│   │   └── tools/                  ← global shared tools
-│   ├── .gitignore
-│   └── requirements.txt
 ├── scripts/
+│   ├── init-engagement.py          ← scaffolds a new engagement directory (inline templates, git init)
 │   ├── load-context.py             ← pure context assembly (no side effects)
 │   ├── install-deps.py             ← installs requirements.txt top-down
 │   ├── set-status.py               ← agent/skill gateway for status.yaml (validates transitions)
@@ -30,6 +24,8 @@ accounting-plugin/
     ├── done/SKILL.md               ← post-review learning
     └── status/SKILL.md             ← class progress dashboard
 ```
+
+`init-engagement.py` generates the engagement root structure from inline templates — there is no separate template directory. It creates `.context-root`, `AGENT.md`, `.claude/tools/`, `.gitignore`, `requirements.txt`, initializes git, and creates the engagement venv.
 
 ### `${CLAUDE_PLUGIN_ROOT}`
 
