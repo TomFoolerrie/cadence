@@ -27,6 +27,7 @@ spec/
 docs/
 notes/
 engagement-template/
+test-artifacts/
 
 # Plugin archive
 plugin.zip

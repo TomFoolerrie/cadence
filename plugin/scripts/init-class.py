@@ -43,15 +43,8 @@ def main() -> int:
     try:
         target.mkdir(parents=True)
 
-        # .class.yaml
-        data = {
-            "schema_version": 1,
-            "name": title,
-            "description": "",
-            "manifest": [],
-        }
-        with open(target / ".class.yaml", "w") as f:
-            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+        # .class (class directory marker)
+        (target / ".class").write_text("")
 
         # AGENT.md
         agent_md = (

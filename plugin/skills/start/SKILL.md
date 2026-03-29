@@ -22,16 +22,6 @@ python ${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.py
 
 ## Step 3 — Scaffold Period Directory
 
-Write `status.yaml` directly (init-period.py requires this):
-
-```yaml
-schema_version: 1
-status: in_progress
-period: "<period>"
-issues: []
-done_at: null
-```
-
 If `periods/<period>/` does **not** already exist, scaffold it:
 
 ```bash

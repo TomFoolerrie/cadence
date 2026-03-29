@@ -1,11 +1,9 @@
 """
 Contract tests for load-context.py
 
-Spec: load-context.py --level root|class|task [--orchestrator]
+Spec: load-context.py --level root|class|task
 - Walks up from cwd to find .context-root
 - Assembles context top-down: root AGENT.md → class AGENT.md → task files
-- --orchestrator adds .class.yaml content (only valid with --level class)
-- Blocked status appends recovery hint
 - Tool paths printed in resolution order (task > class > global)
 - Exit codes: 0 = success, 1 = precondition failed
 - Idempotent (pure read)
@@ -30,10 +28,8 @@ pytestmark = pytest.mark.mid
 # ---------------------------------------------------------------------------
 
 
-def run_load_context(cwd, level, orchestrator=False):
+def run_load_context(cwd, level):
     args = ["--level", level]
-    if orchestrator:
-        args.append("--orchestrator")
     return run_script("load-context.py", args, cwd=cwd)
 
 
@@ -96,50 +92,6 @@ class TestOutputFormat:
         task_pos = stdout.find("## Purpose")
 
         assert root_pos < class_pos < task_pos
-
-
-# ---------------------------------------------------------------------------
-# --orchestrator flag
-# ---------------------------------------------------------------------------
-
-
-class TestOrchestratorFlag:
-    """--orchestrator flag appends .class.yaml content."""
-
-    def test_orchestrator_appends_class_yaml(self, class_dir):
-        result = run_load_context(class_dir, "class", orchestrator=True)
-        assert result.returncode == 0
-        # .class.yaml manifest content should appear
-        assert "monthly-bank-fees" in result.stdout
-
-    def test_orchestrator_only_valid_with_class_level(self, engagement_root, task_dir):
-        """--orchestrator exits 1 when used with root or task level."""
-        result_root = run_load_context(engagement_root, "root", orchestrator=True)
-        assert result_root.returncode == 1
-
-        result_task = run_load_context(task_dir, "task", orchestrator=True)
-        assert result_task.returncode == 1
-
-
-# ---------------------------------------------------------------------------
-# Recovery hints
-# ---------------------------------------------------------------------------
-
-
-class TestRecoveryHints:
-    """Blocked status triggers recovery hint in output."""
-
-    def test_blocked_status_appends_recovery_hint(self, task_dir_blocked):
-        result = run_load_context(task_dir_blocked, "task")
-        assert result.returncode == 0
-        # Should contain some form of recovery guidance
-        stdout_lower = result.stdout.lower()
-        assert "recovery" in stdout_lower or "blocked" in stdout_lower
-
-    def test_non_blocked_status_no_recovery_hint(self, task_dir_in_progress):
-        result = run_load_context(task_dir_in_progress, "task")
-        assert result.returncode == 0
-        assert "recovery" not in result.stdout.lower()
 
 
 # ---------------------------------------------------------------------------

@@ -2,8 +2,8 @@
 Contract tests for init-task.py
 
 Spec: init-task.py <name> (run from class directory)
-- Creates: SKILL.md, learned.md, status.yaml, tools/, periods/, requirements.txt
-- Preconditions: .class.yaml exists in cwd, target directory does not exist
+- Creates: SKILL.md, learned.md, tools/, periods/, requirements.txt, reference.md
+- Preconditions: AGENT.md exists in cwd, target directory does not exist
 - Exit codes: 0 = success, 1 = precondition failed, 2 = filesystem error
 - Not idempotent
 """
@@ -34,7 +34,6 @@ class TestCreatesTaskDirectory:
         assert task_dir.is_dir()
         assert (task_dir / "SKILL.md").is_file()
         assert (task_dir / "learned.md").is_file()
-        assert (task_dir / "status.yaml").is_file()
         assert (task_dir / "tools").is_dir()
         assert (task_dir / "periods").is_dir()
         assert (task_dir / "requirements.txt").is_file()
@@ -53,16 +52,6 @@ class TestCreatesTaskDirectory:
         assert "## Plugin Scripts" in content
         assert "| Script | Purpose | Usage |" in content
         assert "init-period.py" in content
-
-    def test_status_yaml_initial_values(self, class_dir):
-        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
-
-        data = read_yaml(class_dir / "monthly-bank-fees" / "status.yaml")
-        assert data["schema_version"] == 1
-        assert data["period"] == ""
-        assert data["status"] == "not_started"
-        assert data["issues"] == []
-        assert data["done_at"] is None
 
     def test_skill_md_contains_required_sections(self, class_dir):
         run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
@@ -132,8 +121,8 @@ class TestCreatesTaskDirectory:
 class TestPreconditions:
     """init-task.py exits 1 when preconditions are not met."""
 
-    def test_exit_1_no_class_yaml(self, tmp_path):
-        """Fails when .class.yaml is missing from cwd."""
+    def test_exit_1_no_class_marker(self, tmp_path):
+        """Fails when .class marker is missing from cwd (not a class dir)."""
         result = run_script("init-task.py", ["my-task"], cwd=tmp_path)
         assert result.returncode == 1
         assert not (tmp_path / "my-task").exists()
@@ -153,9 +142,3 @@ class TestPreconditions:
         result2 = run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
         assert result2.returncode == 1
 
-    def test_malformed_class_yaml_exits_cleanly(self, tmp_path):
-        """Malformed .class.yaml exits with error, not a Python traceback."""
-        (tmp_path / ".class.yaml").write_text("not: valid: yaml: [[[")
-        result = run_script("init-task.py", ["my-task"], cwd=tmp_path)
-        assert result.returncode != 0
-        assert "Traceback" not in result.stderr

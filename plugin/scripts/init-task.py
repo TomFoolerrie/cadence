@@ -4,7 +4,7 @@
 Usage: init-task.py <name>
 
 Preconditions:
-  - cwd contains .class.yaml
+  - cwd contains .class (class directory marker)
   - Target directory does not already exist
 
 Exit codes: 0 = success, 1 = precondition failed, 2 = filesystem error
@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-import yaml
+
 
 
 SKILL_MD_TEMPLATE = """\
@@ -98,17 +98,9 @@ def main() -> int:
     cwd = Path.cwd()
 
     # --- Preconditions ---
-    class_yaml = cwd / ".class.yaml"
-    if not class_yaml.is_file():
-        print("Not in a class directory (no .class.yaml)", file=sys.stderr)
-        return 1
-
-    # Validate that .class.yaml is parseable
-    try:
-        with open(class_yaml) as f:
-            yaml.safe_load(f)
-    except yaml.YAMLError:
-        print("Invalid .class.yaml", file=sys.stderr)
+    class_marker = cwd / ".class"
+    if not class_marker.is_file():
+        print("Not in a class directory (no .class marker)", file=sys.stderr)
         return 1
 
     task_dir = cwd / name
@@ -128,17 +120,6 @@ def main() -> int:
 
         # reference.md
         (task_dir / "reference.md").write_text(REFERENCE_MD_TEMPLATE.format(name=name))
-
-        # status.yaml
-        status_data = {
-            "schema_version": 1,
-            "period": "",
-            "status": "not_started",
-            "issues": [],
-            "done_at": None,
-        }
-        with open(task_dir / "status.yaml", "w") as f:
-            yaml.dump(status_data, f, default_flow_style=False, sort_keys=False)
 
         # tools/
         (task_dir / "tools").mkdir()

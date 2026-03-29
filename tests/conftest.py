@@ -208,33 +208,16 @@ def make_context_root(
 def make_class(
     root: Path,
     name: str = "treasury",
-    manifest: Optional[List[Dict]] = None,
 ) -> Path:
     """
-    Create a class directory under root with .class.yaml, AGENT.md, tools/, requirements.txt.
+    Create a class directory under root with AGENT.md, tools/, requirements.txt.
     Returns path to the class directory.
     """
-    if manifest is None:
-        manifest = [
-            {
-                "task": "monthly-bank-fees",
-                "order": 1,
-                "enabled": True,
-                "period_format": "monthly",
-                "anchor": "first_monday",
-            }
-        ]
-
     class_dir = root / name
     class_dir.mkdir(parents=True, exist_ok=True)
 
-    # .class.yaml
-    write_yaml(class_dir / ".class.yaml", {
-        "schema_version": DEFAULT_SCHEMA_VERSION,
-        "name": name.replace("-", " ").title(),
-        "description": "",
-        "manifest": manifest,
-    })
+    # .class (class directory marker)
+    (class_dir / ".class").write_text("")
 
     # AGENT.md
     class_name = name.replace("-", " ").title()
@@ -266,10 +249,6 @@ def make_class(
 def make_task(
     class_path: Path,
     name: str = "monthly-bank-fees",
-    status: str = "not_started",
-    period: str = "",
-    done_at: Optional[str] = None,
-    issues: Optional[List[str]] = None,
 ) -> Path:
     """
     Create a task directory under class_path with all required files.
@@ -293,15 +272,6 @@ def make_task(
         "| `init-period.py` | Scaffold a new period directory | `python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>` |\n"
     )
     (task_dir / "reference.md").write_text(reference_content)
-
-    # status.yaml
-    write_yaml(task_dir / "status.yaml", {
-        "schema_version": DEFAULT_SCHEMA_VERSION,
-        "period": period,
-        "status": status,
-        "issues": issues or [],
-        "done_at": done_at,
-    })
 
     # tools/
     (task_dir / "tools").mkdir(exist_ok=True)
@@ -368,49 +338,17 @@ def engagement_root(tmp_path):
 
 @pytest.fixture
 def class_dir(engagement_root):
-    """
-    Class directory (treasury/) under engagement root.
-    .class.yaml has one monthly task entry in manifest.
-    """
+    """Class directory (treasury/) under engagement root."""
     return make_class(engagement_root, "treasury")
 
 
 @pytest.fixture
 def task_dir(class_dir):
-    """Task directory (monthly-bank-fees/) under class dir. Status: not_started."""
+    """Task directory (monthly-bank-fees/) under class dir."""
     return make_task(class_dir, "monthly-bank-fees")
 
 
 @pytest.fixture
 def task_dir_in_progress(class_dir):
-    """Task directory with status: in_progress, period: 2026-03."""
-    return make_task(
-        class_dir,
-        "monthly-bank-fees",
-        status="in_progress",
-        period="2026-03",
-    )
-
-
-@pytest.fixture
-def task_dir_done(class_dir):
-    """Task directory with status: done, done_at set, period: 2026-03."""
-    return make_task(
-        class_dir,
-        "monthly-bank-fees",
-        status="done",
-        period="2026-03",
-        done_at=datetime.now(timezone.utc).isoformat(),
-    )
-
-
-@pytest.fixture
-def task_dir_blocked(class_dir):
-    """Task directory with status: blocked, issues populated."""
-    return make_task(
-        class_dir,
-        "monthly-bank-fees",
-        status="blocked",
-        period="2026-03",
-        issues=["Chase API returned 401 — token expired"],
-    )
+    """Task directory — alias for task_dir (no status tracking in MVP)."""
+    return make_task(class_dir, "monthly-bank-fees")

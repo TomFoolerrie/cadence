@@ -23,7 +23,7 @@ def detect_level(cwd: Path):
     """Determine the current level and return (level, root, class_dir, task_dir)."""
     if (cwd / "SKILL.md").exists():
         return "task"
-    elif (cwd / ".class.yaml").exists():
+    elif (cwd / ".class").exists():
         return "class"
     elif (cwd / ".context-root").exists():
         return "root"

@@ -2,7 +2,7 @@
 Contract tests for init-class.py
 
 Spec: init-class.py <name> (run from engagement root)
-- Creates: .class.yaml, AGENT.md, tools/, requirements.txt
+- Creates: AGENT.md, tools/, requirements.txt
 - Preconditions: .context-root exists in cwd, target directory does not exist
 - Exit codes: 0 = success, 1 = precondition failed, 2 = filesystem error
 - Not idempotent
@@ -32,19 +32,9 @@ class TestCreatesClassDirectory:
 
         class_dir = engagement_root / "treasury"
         assert class_dir.is_dir()
-        assert (class_dir / ".class.yaml").is_file()
         assert (class_dir / "AGENT.md").is_file()
         assert (class_dir / "tools").is_dir()
         assert (class_dir / "requirements.txt").is_file()
-
-    def test_class_yaml_content(self, engagement_root):
-        run_script("init-class.py", ["treasury"], cwd=engagement_root)
-
-        data = read_yaml(engagement_root / "treasury" / ".class.yaml")
-        assert data["schema_version"] == 1
-        assert data["name"] == "Treasury"
-        assert data["description"] == ""
-        assert data["manifest"] == []
 
     def test_agent_md_contains_template_sections(self, engagement_root):
         run_script("init-class.py", ["treasury"], cwd=engagement_root)
@@ -136,13 +126,13 @@ class TestEdgeCases:
     """Edge cases for init-class.py."""
 
     def test_kebab_case_name(self, engagement_root):
-        """Kebab-case names create correct directory and title-case .class.yaml name."""
+        """Kebab-case names create correct directory and title-case AGENT.md name."""
         result = run_script("init-class.py", ["order-to-cash"], cwd=engagement_root)
         assert result.returncode == 0
         assert (engagement_root / "order-to-cash").is_dir()
 
-        data = read_yaml(engagement_root / "order-to-cash" / ".class.yaml")
-        assert data["name"] == "Order To Cash"
+        content = (engagement_root / "order-to-cash" / "AGENT.md").read_text()
+        assert "Order To Cash" in content
 
     def test_no_partial_write_on_failure(self, engagement_root):
         """When target exists, no files are modified inside it."""
@@ -155,7 +145,7 @@ class TestEdgeCases:
 
         # Original file untouched, no new files created
         assert marker.read_text() == "original"
-        assert not (target / ".class.yaml").exists()
+        assert not (target / "AGENT.md").exists()
 
     def test_malformed_context_root_exits_cleanly(self, tmp_path):
         """Malformed .context-root exits with error, not a Python traceback."""

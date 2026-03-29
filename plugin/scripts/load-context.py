@@ -6,7 +6,7 @@ Reads hierarchy files (root / class / task) and prints them to stdout.
 No side effects (pure read).
 
 Usage:
-    load-context.py --level root|class|task [--orchestrator]
+    load-context.py --level root|class|task
 """
 
 import argparse
@@ -36,12 +36,12 @@ def find_context_root(start: Path) -> Optional[Path]:
 
 
 def find_class_dir(start: Path, root: Path) -> Optional[Path]:
-    """Walk up from *start* (inclusive) looking for a directory with .class.yaml,
+    """Walk up from *start* (inclusive) looking for a directory with .class marker,
     stopping at (and including) *root*."""
     current = start.absolute()
     root = root.absolute()
     while True:
-        if (current / ".class.yaml").exists():
+        if (current / ".class").exists():
             return current
         if current == root:
             return None
@@ -76,17 +76,7 @@ def main() -> int:
         choices=["root", "class", "task"],
         help="Hierarchy level to load.",
     )
-    parser.add_argument(
-        "--orchestrator",
-        action="store_true",
-        help="Include .class.yaml (only valid with --level class).",
-    )
     args = parser.parse_args()
-
-    # --orchestrator only valid with --level class
-    if args.orchestrator and args.level != "class":
-        print("--orchestrator is only valid with --level class", file=sys.stderr)
-        return 1
 
     cwd = Path.cwd()
 
@@ -127,9 +117,6 @@ def main() -> int:
     output_parts.append(section("class/AGENT.md", class_agent))
 
     if args.level == "class":
-        if args.orchestrator:
-            class_yaml_content = read_file(class_dir / ".class.yaml")
-            output_parts.append(section(".class.yaml", class_yaml_content))
         print("\n".join(output_parts).rstrip())
         return 0
 
@@ -162,26 +149,10 @@ def main() -> int:
     learned_content = read_file(task_dir / "learned.md")
     output_parts.append(section("learned.md", learned_content))
 
-    # status.yaml
-    status_content = read_file(task_dir / "status.yaml")
-    output_parts.append(section("status.yaml", status_content))
-
     # reference.md (write restrictions and script docs)
     reference_content = read_file(task_dir / "reference.md")
     if reference_content:
         output_parts.append(section("reference.md", reference_content))
-
-    # Recovery hint if blocked
-    try:
-        with open(task_dir / "status.yaml") as f:
-            status_data = yaml.safe_load(f)
-        if isinstance(status_data, dict) and status_data.get("status") == "blocked":
-            output_parts.append(
-                "\u26a0 Recovery: This task is blocked. Review issues[] and decide "
-                "\u2014 retry (resets to not_started) or investigate further."
-            )
-    except (yaml.YAMLError, FileNotFoundError):
-        pass
 
     # Tools section
     task_tools = task_dir / "tools"

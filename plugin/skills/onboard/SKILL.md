@@ -11,7 +11,6 @@ version: 2.0.0
 ## Constraints
 
 - All directory creation MUST go through `init-*.py` scripts. Never use `mkdir`.
-- `status.yaml` and `.class.yaml` are written directly by the agent (no gated scripts).
 - Markdown files (`SKILL.md`, `learned.md`, `AGENT.md`) are written directly by the agent.
 - One git commit per skill invocation.
 
@@ -20,7 +19,7 @@ version: 2.0.0
 Check the current working directory:
 
 - If `.context-root` exists in cwd → **Class-Level Onboarding**
-- If `.class.yaml` exists in cwd → **Task-Level Onboarding**
+- If `.class` exists in cwd → **Task-Level Onboarding**
 - Otherwise → tell the user: *"Run /onboard from the engagement root or a class directory."* Stop.
 
 ---
@@ -106,40 +105,15 @@ Based on the interview, write:
 
 Keep SKILL.md and learned.md focused — they are loaded every period.
 
-### Step 6 — Register Task in `.class.yaml`
-
-Read the current `.class.yaml`, add a manifest entry. Ask the user for `period_format` and `anchor`:
-
-```yaml
-manifest:
-  - task: <name>
-    order: 1
-    period_format: monthly    # or weekly, quarterly, adhoc
-    anchor: first_monday      # when this task becomes due
-    enabled: true
-```
-
-Write the updated `.class.yaml` directly.
-
-### Step 7 — Install Dependencies
+### Step 6 — Install Dependencies
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.py
 ```
 
-### Step 8 — First Period Execution
+### Step 7 — First Period Execution
 
 Ask the user: *"What period is this for?"* (e.g., `2026-03`)
-
-Write `<name>/status.yaml` (init-period.py requires this):
-
-```yaml
-schema_version: 1
-status: in_progress
-period: "<period>"
-issues: []
-done_at: null
-```
 
 Scaffold and load context:
 
@@ -150,7 +124,7 @@ python ${CLAUDE_PLUGIN_ROOT}/scripts/load-context.py --level task
 
 Execute the procedure from SKILL.md. Place outputs in `periods/<period>/workpapers/`.
 
-### Step 9 — Commit
+### Step 8 — Commit
 
 ```bash
 git add -A && git commit -m "[onboard] Add task: <name>"

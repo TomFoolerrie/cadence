@@ -40,16 +40,7 @@ Apply the user's corrections to files in `periods/<period>/workpapers/`.
 
 If the procedure itself needs updating, show a diff and get **explicit user approval** before editing. If rejected, note it in learned.md.
 
-## Step 5 — Write status.yaml
-
-```yaml
-schema_version: 1
-status: done
-period: "<period>"
-done_at: "<ISO 8601 timestamp>"
-```
-
-## Step 6 — Git Commit
+## Step 5 — Git Commit
 
 ```bash
 git add -A && git commit -m "[done] Complete <period>"
