@@ -1,6 +1,6 @@
 {
   "name": "cadence",
-  "version": "0.1.0",
+  "version": "0.1.0-mvp",
   "description": "Scaffolds and manages a 3-level context hierarchy (root/class/task) for recurring professional workflows. Captures human expertise into executable procedures that fresh Claude instances can run each period.",
   "author": {
     "name": "Dom LaRocco"

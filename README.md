@@ -40,25 +40,14 @@ engagement-root/                # Root — entity context
 
 Context flows downward: a task agent automatically sees root `AGENT.md` → class `AGENT.md` → task files. `load-context.py` assembles this chain. Tools resolve task → class → global (most specific wins).
 
-### Status Machine
+### Status Tracking
 
-Tasks follow a strict state machine enforced by `set-status.py`:
-
-```
-not_started → in_progress → review_ready → done
-                  ↑              │
-                  └──────────────┘  (rejection — re-execute)
-              in_progress → blocked → not_started (retry)
-                                    → abandoned   (give up)
-done/abandoned → not_started  (check-periods.py — next period due)
-```
-
-Class status is always derived on the fly from task statuses — never stored.
+Task status is tracked in `status.yaml`, written directly by skills. No enforced state machine.
 
 ### Design Principles
 
 - **The folder is the memory, not the agent.** Each execution gets a fresh Claude instance. Nothing carries over except what's written to the folder.
-- **Hard boundaries over instructions.** Write scope enforcement (`.claude/settings.json`) prevents agents from bypassing scripts. Scripts gate all YAML mutations.
+- **Hard boundaries over instructions.** Scripts handle scaffolding and validation. Structural mutations go through scripts, not raw file writes.
 - **The hierarchy belongs to the user.** It's folders and markdown on a filesystem. Uninstalling the plugin doesn't delete their data. Any runtime that can parse YAML and run Python can execute it.
 - **Git-versioned.** Every change is committed automatically. Full undo history.
 
@@ -68,13 +57,9 @@ Class status is always derived on the fly from task statuses — never stored.
 cadence/
 ├── plugin/                  # The Cowork plugin
 │   ├── .claude-plugin/      #   Plugin manifest (plugin.json)
-│   ├── scripts/             #   14 Python scripts (infrastructure)
-│   └── skills/              #   4 skill definitions (SKILL.md files)
-├── spec/                    # Design specification (source of truth)
-├── tests/                   # 299 unit + e2e tests
-├── notes/                   # Build specs for unimplemented features, dry run findings
-├── docs/                    # Background research (landscape analysis, design outline)
-├── engagement-template/     # Starter scaffold for new engagements (used by Cowork)
+│   ├── scripts/             #   7 Python scripts (infrastructure)
+│   └── skills/              #   3 skill definitions (SKILL.md files)
+├── tests/                   # ~100 unit + e2e tests
 ├── pyproject.toml           # Project config (cadence v0.1.0)
 └── venv/                    # Python virtual environment
 ```
@@ -85,29 +70,21 @@ cadence/
 
 | Skill | Run from | Purpose |
 |-------|----------|---------|
-| `/onboard` | Root or class dir | Knowledge transfer — interviews the human, scaffolds class/task, creates SKILL.md and tools, runs first period to `review_ready` |
-| `/start` | Task dir | Executes a task for the current period. Handles first run, retry from `blocked`, and re-execution after rejection. Sets `review_ready` on success, `blocked` on failure |
-| `/done` | Task dir (same conversation as `/start`) | Captures review feedback, updates learned.md, proposes SKILL.md changes (human-approved), sets `done`, archives to Google Drive |
-| `/status` | Class dir | Read-only dashboard — reads all task `status.yaml` files, computes class rollup on the fly |
+| `/onboard` | Root or class dir | Knowledge transfer — interviews the human, scaffolds class/task, creates SKILL.md and tools |
+| `/start` | Task dir | Executes a task for the current period |
+| `/done` | Task dir (same conversation as `/start`) | Captures review feedback, updates learned.md, proposes SKILL.md changes (human-approved) |
 
 ### Scripts (called by skills, enforce validation)
 
 | Script | Purpose |
 |--------|---------|
 | `init-engagement.py` | Scaffold a new engagement root with git init |
-| `init-class.py` | Scaffold a new class directory (generates `.claude/settings.json`) |
-| `init-task.py` | Scaffold a new task directory (generates `.claude/settings.json`) |
+| `init-class.py` | Scaffold a new class directory |
+| `init-task.py` | Scaffold a new task directory |
 | `init-period.py` | Scaffold a period directory (data/, workpapers/, review-notes/) |
-| `edit-class-yaml.py` | Gateway for `.class.yaml` mutations (enum-validated) |
-| `load-context.py` | Assemble context from the hierarchy (pure read, no side effects) |
-| `set-status.py` | Validate and apply status transitions |
-| `start-setup.py` | Atomic setup phase for `/start` (status + deps + period + context) |
-| `install-deps.py` | Install requirements.txt files top-down through hierarchy |
-| `check-periods.py` | Scheduled reset of completed tasks when next anchor date arrives |
-| `archive-period.py` | Upload completed period to Google Drive |
 | `init-venv.py` | Create Python venv at engagement root (idempotent) |
-| `onboard-setup.py` | Atomic setup for `/onboard` (context + task scaffold) |
-| `onboard-register.py` | Register task in manifest (venv + deps + manifest + description) |
+| `load-context.py` | Assemble context from the hierarchy (pure read, no side effects) |
+| `install-deps.py` | Install requirements.txt files top-down through hierarchy |
 
 All scripts follow the exit-code contract (see `spec/05-scripts.md`): exit 0 = success, exit 1 = validation error, exit 2 = system error. Non-zero exit guarantees no side effects.
 
@@ -118,12 +95,8 @@ source venv/bin/activate
 python -m pytest tests/
 ```
 
-299 tests (unit + e2e). Markers: `@pytest.mark.mid` for component tests, `@pytest.mark.e2e` for workflow tests.
+~100 tests (unit + e2e). Markers: `@pytest.mark.mid` for component tests, `@pytest.mark.e2e` for workflow tests.
 
 ## Current Status
 
-- **v0.1.0** — All 14 scripts implemented and tested. 4 skill definitions written.
-- **First dry run** completed 2026-03-25 on Cowork. Validated the core flow (`/onboard` → `/start` → `/done`) but surfaced critical issues around agent script bypass.
-- **Post-dry-run fixes** — All three critical items resolved: `init-engagement.py` (git init), `edit-class-yaml.py` (enum-validated YAML gateway), write scope enforcement (`.claude/settings.json` auto-generated by scaffolding scripts).
-- **v0.1.1** — Anchor system redesigned (one-ahead with `last_*` support, late-completion guard). Engagement venv support added. `/onboard` consolidated from 7-8 script calls to 3. Script exit patterns normalized.
-- **Next** — See `notes/open-items.md` for the priority queue.
+**MVP branch** — 7 scripts, 3 skills. Scaffolding and context loading. Human-driven execution with direct YAML state management.

@@ -274,7 +274,7 @@ class TestReferenceMd:
         result = run_load_context(task_dir, "task")
         assert result.returncode == 0
         assert "\u2500\u2500 reference.md \u2500\u2500" in result.stdout
-        assert "Write Restrictions" in result.stdout
+        assert "Plugin Scripts" in result.stdout
 
     def test_root_level_excludes_reference_md(self, engagement_root):
         result = run_load_context(engagement_root, "root")

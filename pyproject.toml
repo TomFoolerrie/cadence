@@ -1,6 +1,6 @@
 [project]
 name = "cadence"
-version = "0.1.0"
+version = "0.1.0-mvp"
 description = "Plugin system that scaffolds a managed 3-level context hierarchy"
 requires-python = ">=3.10"
 dependencies = [

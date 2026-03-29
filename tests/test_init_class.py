@@ -82,7 +82,7 @@ class TestCreatesClassDirectory:
         assert settings == {
             "permissions": {
                 "allow": ["Read", "Write(./**)"],
-                "deny": ["Write(../**)", "Write(./.class.yaml)"],
+                "deny": ["Write(../**)"],
             }
         }
 
@@ -94,7 +94,6 @@ class TestCreatesClassDirectory:
 
         deny = settings["permissions"]["deny"]
         assert "Write(../**)" in deny
-        assert "Write(./.class.yaml)" in deny
 
 
 # ---------------------------------------------------------------------------
