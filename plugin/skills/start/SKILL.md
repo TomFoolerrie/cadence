@@ -52,7 +52,7 @@ Follow the task's `SKILL.md` procedure from the loaded context. Use `learned.md`
 git add -A && git commit -m "[start] Execute <period>"
 ```
 
-Tell the user: **"Done. Run /done to review."**
+Tell the user: **"Execution complete. Review the output — when you're happy with it, run /done to close out the period."**
 
 ## Constraints
 

@@ -140,4 +140,4 @@ Execute the procedure from SKILL.md. Place outputs in `periods/<period>/workpape
 git add -A && git commit -m "[onboard] Add task: <name>"
 ```
 
-Tell the user: **"Done. Run /done to review."**
+Tell the user: **"Task onboarded. Review the output — when you're happy with it, run /done to close out the period."**
