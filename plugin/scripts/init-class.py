@@ -73,7 +73,7 @@ def main() -> int:
         settings = {
             "permissions": {
                 "allow": ["Read", "Write(./**)"],
-                "deny": ["Write(../**)", "Write(./.class.yaml)"],
+                "deny": ["Write(../**)"],
             }
         }
         with open(target / ".claude" / "settings.json", "w") as f:

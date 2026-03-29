@@ -55,14 +55,9 @@ version: 0.1.0
 REFERENCE_MD_TEMPLATE = """\
 # reference — {name}
 
-## Write Restrictions
-- `status.yaml` — Do not edit directly. Use: `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/set-status.py <status>`
-- Do not create directories with mkdir. Use: `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/init-period.py <period>`
-
 ## Plugin Scripts
 | Script | Purpose | Usage |
 |--------|---------|-------|
-| `set-status.py` | Change task status | `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/set-status.py <status>` |
 | `init-period.py` | Scaffold a new period directory | `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/init-period.py <period>` |
 """
 
@@ -156,7 +151,7 @@ def main() -> int:
         settings = {
             "permissions": {
                 "allow": ["Read", "Write(./**)"],
-                "deny": ["Write(../**)", "Write(./status.yaml)"],
+                "deny": ["Write(../**)"],
             }
         }
         with open(task_dir / ".claude" / "settings.json", "w") as f:
