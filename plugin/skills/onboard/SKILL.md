@@ -129,9 +129,9 @@ python ${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.py
 
 ### Step 8 — First Period Execution
 
-**8a.** Ask the user: *"What period is this for?"* (e.g., `2026-03`)
+Ask the user: *"What period is this for?"* (e.g., `2026-03`)
 
-**8b.** Write `<name>/status.yaml`:
+Write `<name>/status.yaml` (init-period.py requires this):
 
 ```yaml
 schema_version: 1
@@ -141,36 +141,19 @@ issues: []
 done_at: null
 ```
 
-**8c.** Scaffold the period:
+Scaffold and load context:
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>
-```
-
-**8d.** Load task context:
-
-```bash
 python ${CLAUDE_PLUGIN_ROOT}/scripts/load-context.py --level task
 ```
 
-**8e.** Execute the procedure from SKILL.md. Place outputs in `periods/<period>/workpapers/`.
+Execute the procedure from SKILL.md. Place outputs in `periods/<period>/workpapers/`.
 
-### Step 9 — Mark Review Ready
-
-On success, update `<name>/status.yaml`:
-
-```yaml
-schema_version: 1
-status: review_ready
-period: "<period>"
-issues: []
-done_at: null
-```
-
-### Step 10 — Commit
+### Step 9 — Commit
 
 ```bash
 git add -A && git commit -m "[onboard] Add task: <name>"
 ```
 
-Tell the user: *"Task onboarded. Run /done to review the output."*
+Tell the user: **"Done. Run /done to review."**
