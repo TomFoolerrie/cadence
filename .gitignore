@@ -22,8 +22,11 @@ venv/
 engagement-template-dry-run/
 engagement-template dry-run-v2-artifact/
 
-# Notes
-notes/working.md
+# Untracked project dirs (kept local, not in MVP)
+spec/
+docs/
+notes/
+engagement-template/
 
 # Plugin archive
 plugin.zip
