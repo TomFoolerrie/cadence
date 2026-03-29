@@ -4,23 +4,22 @@ A plugin for [Claude Cowork](https://claude.ai) that scaffolds and manages a 3-l
 
 ## Architecture
 
-The plugin manages **engagement hierarchies** — folder structures that live outside this repo, on the user's filesystem. Each hierarchy has exactly three levels deep (no nesting beyond root → class → task):
+The plugin manages **engagement hierarchies** — folder structures that live outside this repo, on the user's filesystem. Each hierarchy has exactly three levels (root → class → task):
 
 ```
 engagement-root/                # Root — entity context
 ├── .context-root               #   Root marker (YAML: engagement name, schema version)
 ├── AGENT.md                    #   Entity details (legal name, fiscal year, materiality, contacts)
 ├── requirements.txt            #   Global dependencies
-├── .claude/tools/              #   Global shared tools (JE formatter, PDF parser)
+├── .claude/tools/              #   Global shared tools
 ├── treasury/                   # Class — a category of recurring work
-│   ├── .class.yaml             #   Orchestration manifest (tasks, order, period format)
+│   ├── .class                  #   Class directory marker
 │   ├── AGENT.md                #   Class context for task agents
 │   ├── tools/                  #   Class-level shared tools
 │   └── monthly-bank-fees/      # Task — one repeatable unit
 │       ├── SKILL.md            #   The procedure (what to do, step by step)
 │       ├── learned.md          #   Patterns from past executions
-│       ├── status.yaml         #   Current execution state
-│       ├── reference.md        #   Write restrictions + script docs
+│       ├── reference.md        #   Script docs
 │       ├── tools/              #   Task-specific scripts
 │       └── periods/            #   Period-organized work
 │           └── 2026-03/
@@ -32,23 +31,29 @@ engagement-root/                # Root — entity context
 
 ### Levels
 
-- **Root** — engagement-wide context: entity details, materiality thresholds, system access, key contacts. The user rarely interacts here after initial setup.
-- **Class** — groups related tasks (treasury, reporting, collections). `.class.yaml` declares the task manifest with execution phases — tasks at the same `order` value run in parallel, all must complete before the next phase starts. `AGENT.md` provides class context that flows down to task agents.
-- **Task** — where the user lives. Each task is self-contained: `SKILL.md` (procedure), `learned.md` (accumulated learnings), `status.yaml` (execution state), `tools/` (automation scripts), and `periods/` (period-organized work).
+- **Root** — engagement-wide context: entity details, materiality thresholds, system access, key contacts.
+- **Class** — groups related tasks (treasury, reporting, collections). `AGENT.md` provides class context that flows down to task agents.
+- **Task** — where the user lives. Each task is self-contained: `SKILL.md` (procedure), `learned.md` (accumulated learnings), `tools/` (automation scripts), and `periods/` (period-organized work).
 
 ### Context Inheritance
 
 Context flows downward: a task agent automatically sees root `AGENT.md` → class `AGENT.md` → task files. `load-context.py` assembles this chain. Tools resolve task → class → global (most specific wins).
 
-### Status Tracking
+### State
 
-Task status is tracked in `status.yaml`, written directly by skills. No enforced state machine.
+The folder hierarchy is the state. No YAML state files — folder existence tells the story:
+
+- Class directory exists → class is set up
+- Task directory exists → task is set up
+- Period directory exists → work started
+- Workpapers populated → work done
 
 ### Design Principles
 
 - **The folder is the memory, not the agent.** Each execution gets a fresh Claude instance. Nothing carries over except what's written to the folder.
-- **Hard boundaries over instructions.** Scripts handle scaffolding and validation. Structural mutations go through scripts, not raw file writes.
-- **The hierarchy belongs to the user.** It's folders and markdown on a filesystem. Uninstalling the plugin doesn't delete their data. Any runtime that can parse YAML and run Python can execute it.
+- **Scripts for structure, agent for content.** Init scripts handle directory scaffolding. The agent writes markdown and code directly.
+- **The hierarchy belongs to the user.** It's folders and markdown on a filesystem. Uninstalling the plugin doesn't delete their data.
+- **Human-driven.** The user decides when to run each skill. No automation, no state machine.
 - **Git-versioned.** Every change is committed automatically. Full undo history.
 
 ## Repository Layout
@@ -59,8 +64,8 @@ cadence/
 │   ├── .claude-plugin/      #   Plugin manifest (plugin.json)
 │   ├── scripts/             #   7 Python scripts (infrastructure)
 │   └── skills/              #   3 skill definitions (SKILL.md files)
-├── tests/                   # ~100 unit + e2e tests
-├── pyproject.toml           # Project config (cadence v0.1.0)
+├── tests/                   # 88 tests
+├── pyproject.toml           # Project config (cadence v0.1.0-mvp)
 └── venv/                    # Python virtual environment
 ```
 
@@ -70,23 +75,23 @@ cadence/
 
 | Skill | Run from | Purpose |
 |-------|----------|---------|
-| `/onboard` | Root or class dir | Knowledge transfer — interviews the human, scaffolds class/task, creates SKILL.md and tools |
+| `/onboard` | Root or class dir | Knowledge transfer — interviews the human, scaffolds class/task, builds tools from real data, executes first period |
 | `/start` | Task dir | Executes a task for the current period |
-| `/done` | Task dir (same conversation as `/start`) | Captures review feedback, updates learned.md, proposes SKILL.md changes (human-approved) |
+| `/done` | Task dir (same conversation as `/start`) | Captures learnings from the conversation, updates learned.md, proposes SKILL.md changes, commits |
 
-### Scripts (called by skills, enforce validation)
+### Scripts (called by skills, handle scaffolding)
 
 | Script | Purpose |
 |--------|---------|
 | `init-engagement.py` | Scaffold a new engagement root with git init |
-| `init-class.py` | Scaffold a new class directory |
-| `init-task.py` | Scaffold a new task directory |
+| `init-class.py` | Scaffold a new class directory (`.class` marker, AGENT.md, tools/) |
+| `init-task.py` | Scaffold a new task directory (SKILL.md, learned.md, reference.md, tools/, periods/) |
 | `init-period.py` | Scaffold a period directory (data/, workpapers/, review-notes/) |
 | `init-venv.py` | Create Python venv at engagement root (idempotent) |
 | `load-context.py` | Assemble context from the hierarchy (pure read, no side effects) |
 | `install-deps.py` | Install requirements.txt files top-down through hierarchy |
 
-All scripts follow the exit-code contract (see `spec/05-scripts.md`): exit 0 = success, exit 1 = validation error, exit 2 = system error. Non-zero exit guarantees no side effects.
+All scripts follow the exit-code contract: exit 0 = success, exit 1 = validation error, exit 2 = system error.
 
 ## Running Tests
 
@@ -95,8 +100,8 @@ source venv/bin/activate
 python -m pytest tests/
 ```
 
-~100 tests (unit + e2e). Markers: `@pytest.mark.mid` for component tests, `@pytest.mark.e2e` for workflow tests.
+88 tests. Markers: `@pytest.mark.mid` for component tests.
 
 ## Current Status
 
-**MVP branch** — 7 scripts, 3 skills. Scaffolding and context loading. Human-driven execution with direct YAML state management.
+**MVP branch** — 7 scripts, 3 skills, 88 tests. Fully human-driven: scaffolding scripts handle directory structure, the agent handles everything else.
