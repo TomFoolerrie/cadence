@@ -128,10 +128,6 @@ python ${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.py
 
 ### Step 8 — Execute First Period
 
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/scripts/load-context.py --level task
-```
-
 Execute the procedure from SKILL.md. Place outputs in `periods/<period>/workpapers/`.
 
 ### Step 9 — Commit
