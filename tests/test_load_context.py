@@ -285,3 +285,31 @@ class TestReferenceMd:
         result = run_load_context(class_dir, "class")
         assert result.returncode == 0
         assert "reference.md" not in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# status.yaml single-read and blocked hint
+# ---------------------------------------------------------------------------
+
+
+class TestStatusYamlHandling:
+    """status.yaml is read once; blocked hint is shown correctly."""
+
+    def test_blocked_hint_shown(self, task_dir_blocked):
+        """Blocked task shows recovery hint in output."""
+        result = run_load_context(task_dir_blocked, "task")
+        assert result.returncode == 0
+        assert "Recovery" in result.stdout or "blocked" in result.stdout.lower()
+
+    def test_corrupt_status_yaml_no_crash(self, tmp_path):
+        """Corrupt status.yaml still produces output with no traceback."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury")
+        task = make_task(cls, "monthly-bank-fees")
+        # Overwrite status.yaml with invalid YAML
+        (task / "status.yaml").write_text("not: valid: yaml: [[")
+        result = run_load_context(task, "task")
+        assert result.returncode == 0
+        assert "Traceback" not in result.stderr
+        # Raw corrupt content should still appear in status.yaml section
+        assert "status.yaml" in result.stdout

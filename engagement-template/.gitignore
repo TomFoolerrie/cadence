@@ -3,3 +3,5 @@
 .context-cache/
 .DS_Store
 venv/
+.google-credentials.json
+service-account.json

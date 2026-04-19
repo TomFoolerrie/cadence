@@ -89,3 +89,34 @@ class TestContractFields:
         """Script should extract engagement name from .context-root."""
         result = run_archive_period(task_dir_done)
         assert result.returncode != 1
+
+
+# ---------------------------------------------------------------------------
+# Corrupt .context-root handling
+# ---------------------------------------------------------------------------
+
+
+class TestCorruptContextRoot:
+    """archive-period.py exits 2 (not traceback) on bad .context-root."""
+
+    def _make_done_task(self, tmp_path):
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury")
+        return make_task(cls, "monthly-bank-fees", status="done", period="2026-03",
+                         done_at="2026-04-05T14:30:00Z")
+
+    def test_corrupt_context_root_exits_2(self, tmp_path):
+        """Corrupt .context-root YAML exits 2, not an unhandled exception."""
+        task = self._make_done_task(tmp_path)
+        (tmp_path / ".context-root").write_text("not: valid: yaml: [[")
+        result = run_archive_period(task)
+        assert result.returncode == 2
+        assert "Traceback" not in result.stderr
+
+    def test_empty_context_root_exits_2(self, tmp_path):
+        """Empty .context-root exits 2, not an AttributeError traceback."""
+        task = self._make_done_task(tmp_path)
+        (tmp_path / ".context-root").write_text("")
+        result = run_archive_period(task)
+        assert result.returncode == 2
+        assert "Traceback" not in result.stderr

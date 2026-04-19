@@ -162,26 +162,23 @@ def main() -> int:
     learned_content = read_file(task_dir / "learned.md")
     output_parts.append(section("learned.md", learned_content))
 
-    # status.yaml
-    status_content = read_file(task_dir / "status.yaml")
-    output_parts.append(section("status.yaml", status_content))
-
-    # reference.md (write restrictions and script docs)
-    reference_content = read_file(task_dir / "reference.md")
-    if reference_content:
-        output_parts.append(section("reference.md", reference_content))
-
-    # Recovery hint if blocked
+    # status.yaml — read once; derive both display content and blocked hint
+    status_raw = read_file(task_dir / "status.yaml")
+    output_parts.append(section("status.yaml", status_raw))
     try:
-        with open(task_dir / "status.yaml") as f:
-            status_data = yaml.safe_load(f)
+        status_data = yaml.safe_load(status_raw) if status_raw else None
         if isinstance(status_data, dict) and status_data.get("status") == "blocked":
             output_parts.append(
                 "\u26a0 Recovery: This task is blocked. Review issues[] and decide "
                 "\u2014 retry (resets to not_started) or investigate further."
             )
-    except (yaml.YAMLError, FileNotFoundError):
+    except yaml.YAMLError:
         pass
+
+    # reference.md (write restrictions and script docs)
+    reference_content = read_file(task_dir / "reference.md")
+    if reference_content:
+        output_parts.append(section("reference.md", reference_content))
 
     # Tools section
     task_tools = task_dir / "tools"

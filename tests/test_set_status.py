@@ -339,3 +339,17 @@ class TestPeriodFlag:
         task = make_task_with_status(tmp_path, "in_progress")
         result = run_set_status(task, "review_ready", period="2026-03")
         assert result.returncode == 1
+
+    def test_invalid_period_format_rejected(self, tmp_path):
+        """--period with invalid format exits 1."""
+        task = make_task_with_status(tmp_path, "not_started", period="")
+        result = run_set_status(task, "in_progress", period="not-a-period")
+        assert result.returncode == 1
+        assert "Traceback" not in result.stderr
+
+    def test_path_traversal_period_rejected(self, tmp_path):
+        """--period with path traversal string exits 1."""
+        task = make_task_with_status(tmp_path, "not_started", period="")
+        result = run_set_status(task, "in_progress", period="../../etc")
+        assert result.returncode == 1
+        assert "Traceback" not in result.stderr

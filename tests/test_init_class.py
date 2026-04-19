@@ -165,3 +165,23 @@ class TestEdgeCases:
         assert result.returncode != 0
         # Should not contain Python traceback
         assert "Traceback" not in result.stderr
+
+    def test_path_traversal_rejected(self, engagement_root):
+        """Path traversal names like ../evil exit 1 without creating files."""
+        result = run_script("init-class.py", ["../evil"], cwd=engagement_root)
+        assert result.returncode == 1
+        assert not (engagement_root.parent / "evil").exists()
+        assert "Traceback" not in result.stderr
+
+    def test_absolute_path_rejected(self, engagement_root, tmp_path):
+        """Absolute paths exit 1 without creating files."""
+        target = str(tmp_path / "evil")
+        result = run_script("init-class.py", [target], cwd=engagement_root)
+        assert result.returncode == 1
+        assert "Traceback" not in result.stderr
+
+    def test_dot_prefix_rejected(self, engagement_root):
+        """Names starting with '.' exit 1."""
+        result = run_script("init-class.py", [".hidden"], cwd=engagement_root)
+        assert result.returncode == 1
+        assert not (engagement_root / ".hidden").exists()

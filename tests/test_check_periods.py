@@ -665,3 +665,116 @@ class TestOneAheadAnchor:
         data = read_yaml(cls / "t" / "status.yaml")
         assert data["status"] == "not_started"
         assert data["period"] == "2026-05"
+
+
+# ---------------------------------------------------------------------------
+# Bug fixes and edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestEdgeCases:
+    """Regression tests for fixed bugs."""
+
+    def test_invalid_as_of_date_exits_1(self, tmp_path):
+        """--as-of with invalid date exits 1 with no traceback."""
+        root = make_context_root(tmp_path)
+        result = run_script("check-periods.py", ["--as-of", "not-a-date"], cwd=root)
+        assert result.returncode == 1
+        assert "Traceback" not in result.stderr
+
+    def test_empty_period_on_done_task_skipped(self, tmp_path):
+        """Task with status=done and period='' is skipped without crashing."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "t", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "first_monday"},
+        ])
+        # Create task with empty period (as init-task.py initializes it)
+        make_task(cls, "t", status="done", period="", done_at="2026-04-05T00:00:00Z")
+
+        result = run_check_periods(root, as_of="2026-04-07")
+        assert result.returncode == 0
+        assert "Traceback" not in result.stderr
+        # Task should be untouched (still done with empty period)
+        data = read_yaml(cls / "t" / "status.yaml")
+        assert data["status"] == "done"
+
+    def test_corrupt_task_yaml_skipped(self, tmp_path):
+        """Corrupt status.yaml in one task doesn't abort processing of others."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "bad", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "first_monday"},
+            {"task": "good", "order": 2, "enabled": True,
+             "period_format": "monthly", "anchor": "first_monday"},
+        ])
+        # bad task has corrupt status.yaml
+        (cls / "bad").mkdir()
+        (cls / "bad" / "status.yaml").write_text("not: valid: yaml: [[")
+        # good task is done and eligible for reset
+        make_task(cls, "good", status="done", period="2026-03",
+                  done_at="2026-04-05T00:00:00Z")
+
+        result = run_check_periods(root, as_of="2026-04-06")
+        assert result.returncode == 0
+        # Good task should still be reset
+        data = read_yaml(cls / "good" / "status.yaml")
+        assert data["status"] == "not_started"
+
+    def test_git_failure_warning_not_fatal(self, tmp_path):
+        """When git is unavailable or fails, resets still happen and exit is 0."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "t", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "first_monday"},
+        ])
+        make_task(cls, "t", status="done", period="2026-03",
+                  done_at="2026-04-05T00:00:00Z")
+
+        # Run from tmp_path which is not a git repo — git add/commit will fail
+        result = run_check_periods(root, as_of="2026-04-06")
+        assert result.returncode == 0
+        # Reset still happened
+        data = read_yaml(cls / "t" / "status.yaml")
+        assert data["status"] == "not_started"
+
+    def test_malicious_task_name_in_class_yaml_skipped(self, tmp_path):
+        """Task name '../evil' in .class.yaml is skipped, no file written outside class dir."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[])
+        # Manually inject a malicious task name into .class.yaml
+        write_yaml(cls / ".class.yaml", {
+            "schema_version": 1,
+            "name": "Treasury",
+            "description": "",
+            "manifest": [
+                {"task": "../evil", "order": 1, "enabled": True,
+                 "period_format": "monthly", "anchor": "first_monday"},
+            ],
+        })
+
+        result = run_check_periods(root, as_of="2026-04-06")
+        assert result.returncode == 0
+        assert not (root / "evil").exists()
+        assert "Traceback" not in result.stderr
+
+    def test_reset_preserves_custom_fields(self, tmp_path):
+        """check-periods reset keeps extra fields in status.yaml."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[
+            {"task": "t", "order": 1, "enabled": True,
+             "period_format": "monthly", "anchor": "first_monday"},
+        ])
+        make_task(cls, "t", status="done", period="2026-03",
+                  done_at="2026-04-05T00:00:00Z")
+        # Inject a custom field
+        data = read_yaml(cls / "t" / "status.yaml")
+        data["custom"] = "preserved"
+        write_yaml(cls / "t" / "status.yaml", data)
+
+        result = run_check_periods(root, as_of="2026-04-06")
+        assert result.returncode == 0
+
+        after = read_yaml(cls / "t" / "status.yaml")
+        assert after["status"] == "not_started"
+        assert after.get("custom") == "preserved"

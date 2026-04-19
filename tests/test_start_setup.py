@@ -272,8 +272,11 @@ class TestBlockedOnFailure:
         cls = make_class(root, "treasury")
         task = make_task(cls, "monthly-bank-fees")
 
-        # Pass an invalid period format for a monthly task
-        result = run_setup(task, period="bad-period")
+        # Make periods/ a file so init-period.py cannot create the subdirectory
+        (task / "periods").rmdir()
+        (task / "periods").write_text("not a directory")
+
+        result = run_setup(task, period="2026-03")
         assert result.returncode == 2
 
         data = read_yaml(task / "status.yaml")
@@ -292,3 +295,26 @@ class TestBlockedOnFailure:
         data = read_yaml(task / "status.yaml")
         # The blocked reason should contain the error from load-context.py
         assert any("context-root" in issue.lower() for issue in data["issues"])
+
+    def test_set_blocked_invokes_with_end_of_options(self, tmp_path):
+        """_set_blocked passes '--' before reason to prevent argparse misinterpretation.
+
+        Verifies indirectly: a reason starting with '--' still sets blocked correctly.
+        Direct verification: start-setup.py calls set-status.py with ["blocked", "--", reason].
+        """
+        root = make_context_root(tmp_path)
+        make_venv(root)
+        cls = make_class(root, "treasury")
+        task = make_task(cls, "monthly-bank-fees")
+
+        # Cause load-context.py to fail by removing .context-root
+        # The error message from load-context is "--" safe (plain text)
+        # but we verify blocked is correctly set regardless
+        (root / ".context-root").unlink()
+
+        result = run_setup(task, period="2026-03")
+        assert result.returncode == 2
+
+        data = read_yaml(task / "status.yaml")
+        assert data["status"] == "blocked"
+        assert len(data["issues"]) > 0

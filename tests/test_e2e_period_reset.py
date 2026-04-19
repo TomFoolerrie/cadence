@@ -30,18 +30,21 @@ class TestPeriodResetWorkflow:
     """Done → cron reset → next cycle."""
 
     def test_done_then_check_periods_resets(self, tmp_path):
-        """Complete a task, run check-periods past anchor, verify reset."""
+        """Complete a task, run check-periods past anchor, verify reset.
+
+        Uses a pinned done_at (April 1) that is before the first-Monday-of-April
+        anchor (April 6), so the late-completion guard does not fire and the
+        expected next period is deterministically 2026-04.
+        """
         root = make_context_root(tmp_path)
         cls = make_class(root, "treasury", manifest=[
             {"task": "bank-fees", "order": 1, "enabled": True,
              "period_format": "monthly", "anchor": "first_monday"},
         ])
-        task = make_task(cls, "bank-fees")
+        task = make_task(cls, "bank-fees", status="done", period="2026-03",
+                         done_at="2026-04-01T00:00:00Z")
 
-        # Complete the task
-        start_to_done(task, "2026-03")
-
-        # Run check-periods past the anchor date
+        # Run check-periods past the anchor date (first Monday of April = Apr 6)
         result = run_check_periods(root, as_of="2026-05-05")
         assert result.returncode == 0
 

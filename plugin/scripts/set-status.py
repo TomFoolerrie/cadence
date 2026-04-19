@@ -8,11 +8,20 @@ Exit codes: 0=success, 1=invalid transition/missing reason/missing file, 2=corru
 """
 
 import argparse
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+
+PERIOD_PATTERNS = [
+    re.compile(r"^\d{4}-\d{2}$"),         # monthly: 2026-03
+    re.compile(r"^\d{4}-Q[1-4]$"),         # quarterly: 2026-Q1
+    re.compile(r"^\d{4}$"),                # annual: 2026
+    re.compile(r"^\d{4}-\d{2}-\d{2}$"),   # adhoc: 2026-03-15
+    re.compile(r"^\d{4}-W\d{2}$"),         # weekly: 2026-W12
+]
 
 # ---------------------------------------------------------------------------
 # State machine
@@ -70,6 +79,11 @@ def main() -> int:
     # --- Precondition: --period only valid on not_started -> in_progress ---
     if period is not None and not (current_status == "not_started" and new_status == "in_progress"):
         print("--period is only valid on not_started \u2192 in_progress", file=sys.stderr)
+        return 1
+
+    # --- Precondition: period must match a known format ---
+    if period is not None and not any(p.match(period) for p in PERIOD_PATTERNS):
+        print(f"Invalid period format: {period!r}", file=sys.stderr)
         return 1
 
     # --- Precondition: legal transition ---
