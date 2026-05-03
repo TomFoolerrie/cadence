@@ -25,5 +25,8 @@ engagement-template dry-run-v2-artifact/
 # Notes
 notes/working.md
 
+# Optimization loop scratch
+optimize/
+
 # Plugin archive
 plugin.zip
