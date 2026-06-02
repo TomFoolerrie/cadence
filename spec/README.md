@@ -20,3 +20,4 @@
 | [skill-start.md](skill-start.md) | `/start` skill specification |
 | [skill-done.md](skill-done.md) | `/done` skill specification |
 | [skill-status.md](skill-status.md) | `/status` skill specification |
+| [pi-migration.md](pi-migration.md) | Pi-harness migration — detailed spec (resolves planning-doc Q3–Q6) |
