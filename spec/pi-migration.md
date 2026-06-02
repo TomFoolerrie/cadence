@@ -1,6 +1,7 @@
 # Pi Migration — Detailed Spec
 
 **Status:** spec (promoted from [`notes/v2+/pi-migration-plan.md`](../notes/v2+/pi-migration-plan.md))
+**Work order:** [`tickets/ticket-pi-migration.md`](tickets/ticket-pi-migration.md) — the phased build order driving off this spec
 **Date:** 2026-06-02
 **Supersedes for implementation purposes:** the planning doc's §6 Open Questions. **Q3–Q6 are all fully resolved** below — Q5 (Cowork forbids `../` manifest paths → assemble-on-package) and Q6 (Pi manifest is a root `package.json` `pi` key, not `pi/plugin.json`) are confirmed against primary sources (§6).
 

@@ -21,3 +21,4 @@
 | [skill-done.md](skill-done.md) | `/done` skill specification |
 | [skill-status.md](skill-status.md) | `/status` skill specification |
 | [pi-migration.md](pi-migration.md) | Pi-harness migration — detailed spec (resolves planning-doc Q3–Q6) |
+| [tickets/](tickets/) | Work orders. `ticket-pi-migration.md` — the 7-phase build order for the Pi migration |
