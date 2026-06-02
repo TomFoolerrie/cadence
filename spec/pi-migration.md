@@ -2,7 +2,7 @@
 
 **Status:** spec (promoted from [`notes/v2+/pi-migration-plan.md`](../notes/v2+/pi-migration-plan.md))
 **Date:** 2026-06-02
-**Supersedes for implementation purposes:** the planning doc's §6 Open Questions (Q3–Q6 resolved below).
+**Supersedes for implementation purposes:** the planning doc's §6 Open Questions. Q3/Q4 are fully resolved below; Q5/Q6 are resolved *in approach*, each pending one external confirmation (§6).
 
 This spec turns the planning doc into a buildable work order: the open questions
 are resolved against the actual code, the per-file changes are enumerated, and a
@@ -13,9 +13,16 @@ The runtime Pi API assumed throughout is verified against a working Pi
 deployment (the sibling `pi-harness` repo, `@earendil-works/pi-coding-agent`
 **0.75.4**): extensions are `ExtensionFactory` functions; `pi.on("tool_call", e)`
 fires before execution with `{ toolName, input, toolCallId }` and a handler may
-return `{ block: true, reason }` to reject the call; the session is built with
-`createAgentSession({ extensionFactories, skillsOverride, systemPromptOverride })`.
-Pin Cadence's Pi dependency to this exact version (planning doc §6 Q-stability).
+return `{ block: true, reason }` to reject the call. Extension registration and
+skill/prompt overrides go on a `DefaultResourceLoader` —
+`new DefaultResourceLoader({ cwd, agentDir, skillsOverride,
+appendSystemPromptOverride, extensionFactories })`, `await loader.reload()` —
+which is then passed to `createAgentSession({ cwd, model, tools, …,
+resourceLoader: loader })`. (Note the prompt override key is
+`appendSystemPromptOverride`, not `systemPromptOverride`, and the loader, not
+`createAgentSession`, owns `extensionFactories`/`skillsOverride` — verified in
+`pi-harness/harness/session-setup.ts` lines 185–212.) Pin Cadence's Pi
+dependency to this exact version (planning doc §6 Q-stability).
 
 ---
 
@@ -31,8 +38,13 @@ These three facts de-risk the migration and drive the resolutions below.
    need to refactor their path handling.
 
 2. **The only harness-specific behavior in the scaffolding scripts is generating
-   `.claude/settings.json`** (`init-class.py` lines 71–81, `init-task.py` lines
-   154–164). Removing that one block makes both scripts fully shared.
+   the `.claude/` enforcement directory** — `.claude/settings.json` in
+   `init-class.py` (lines 71–81) and `init-task.py` (lines 154–164), and **both
+   `.claude/tools/` and an allow-only `.claude/settings.json` in
+   `init-engagement.py` (lines 98–109)**. Removing those blocks makes all three
+   scripts fully shared. `load-context.py` also reads `root/.claude/tools` (line
+   189) for global tools — harness-specific *reading* that the Pi track must
+   re-home (see S3 / §4).
 
 3. **Engagement folders are external and reference scripts via runtime-resolved
    `${CLAUDE_PLUGIN_ROOT}`.** No repo path is baked into a user's hierarchy. The
@@ -45,11 +57,15 @@ These three facts de-risk the migration and drive the resolutions below.
 
 ### Q3 — Init-script harness awareness → **`CADENCE_TRACK` env var (default `claude`)**
 
-**Decision.** `init-class.py` and `init-task.py` drop their inline
-`.claude/settings.json` generation (grounding fact 2). The Claude-track
-enforcement file is produced by a new `claude/settings-gen.py`. The init scripts
-invoke it **only when `CADENCE_TRACK=claude`**; the Pi track needs no per-dir
-glue at all because the gate self-configures from cwd contents (§3a of the plan).
+**Decision.** All three scaffolders — `init-engagement.py`, `init-class.py`,
+`init-task.py` — drop their inline `.claude/` generation (grounding fact 2). The
+Claude-track enforcement files are produced by a new `claude/settings-gen.py`
+(per-level: root = allow-only, class = deny `.class.yaml`, task = deny
+`status.yaml`). The init scripts invoke it **only when `CADENCE_TRACK=claude`**;
+the Pi track emits no `.claude/` at any level and needs no per-dir glue because
+the gate self-configures from cwd contents (§3a of the plan). The global-tools
+directory (`.claude/tools/`, today created by `init-engagement.py` and read by
+`load-context.py`) must move to a track-neutral home on the Pi track — see S3.
 
 **Why env var, not flag or auto-detect.**
 
@@ -68,11 +84,12 @@ glue at all because the gate self-configures from cwd contents (§3a of the plan
   compatible — existing Cowork runs keep generating `settings.json` with no change).
 - The Claude harness glue sets `CADENCE_TRACK=claude`. The Pi extension sets
   `CADENCE_TRACK=pi` in the environment of any bash tool call it permits.
-- On `CADENCE_TRACK=claude`, `init-class.py`/`init-task.py` shell out to
-  `claude/settings-gen.py <target-dir> <level>` after the shared scaffold writes
-  succeed. A non-zero `settings-gen.py` exit is a system error (exit 2) — the
-  scaffold already wrote, so this is the documented "partial-but-recoverable"
-  case; rerunning `settings-gen.py` is idempotent.
+- On `CADENCE_TRACK=claude`, `init-engagement.py`/`init-class.py`/`init-task.py`
+  shell out to `claude/settings-gen.py <target-dir> <level>` (level ∈
+  {`root`,`class`,`task`}) after the shared scaffold writes succeed. A non-zero
+  `settings-gen.py` exit is a system error (exit 2) — the scaffold already wrote,
+  so this is the documented "partial-but-recoverable" case; rerunning
+  `settings-gen.py` is idempotent.
 - On `CADENCE_TRACK=pi` (or any non-`claude` value), the scripts emit no
   `.claude/` directory.
 
@@ -136,8 +153,8 @@ landing the §4 step-2 restructure** (one quick check against Cowork plugin docs
 sibling `pi-harness` *embeds* Pi via `createAgentSession({extensionFactories})`
 rather than *installing* a third-party Pi package, so it does not pin down the
 on-disk manifest key for a distributable extension. The two candidates are a
-`package.json` `"pi"` field (per the older `docs/pi-migration-strategy.md`) versus
-a standalone `pi/plugin.json` (per the planning doc). **Confirm the exact key and
+`package.json` `"pi"` field versus a standalone `pi/plugin.json` (per the
+planning doc). **Confirm the exact key and
 skills-discovery convention against Pi 0.75.4's own docs/types**, then pin. This
 is the only unresolved external dependency in the migration; everything else is
 verified against the running pi-harness.
@@ -206,6 +223,14 @@ host (then mirror pi-harness's enforce-mode fail-closed).
 file gate. No scope file needed (plan §3a). When `.class.yaml` v2 lands, extend to
 also deny writes under `cycles/` at the class level (plan §3a note).
 
+This reproduces today's two-rule `settings.json` deny lists exactly: the
+`isUnder(target, cwd)` check is the `Write(../**)` rule (no writes above the
+agent root), and the `detectGate` file check is the per-level
+`Write(./.class.yaml)` (class) / `Write(./status.yaml)` (task) rule. The two
+gate branches map one-to-one onto the two deny rules, which is what the §5
+"write outside agent root" and "direct status.yaml/.class.yaml write" parity
+tests assert.
+
 **Whitelist derivation (plan §4 step 4 prerequisite):** sweep every bash
 invocation in the four `skills/*/SKILL.md` bodies and the `reference.md` template
 before finalizing `allowed`. Today's bodies emit `python ${...}/scripts/*.py`
@@ -219,10 +244,16 @@ source of truth, not this sentence.
 Each step keeps **all 299 Claude-track tests green**.
 
 **Step 1 — In-place cleanups (no structural move).**
-- `AGENT.md` → `AGENTS.md` repo-wide: rename in `engagement-template/`, update
-  `load-context.py` (read path), `init-engagement.py` + `init-class.py` (write
-  path), `spec/02-architecture.md` + `spec/04-scaffolding.md` (references), and
-  every test asserting the filename.
+- `AGENT.md` → `AGENTS.md` repo-wide. Drive this off `grep -rl 'AGENT\.md'` (the
+  sweep is the source of truth), not a hand-list. As of this writing that is:
+  the file in `engagement-template/`; `load-context.py` (read path),
+  `init-engagement.py` + `init-class.py` (write path); the shared skill body
+  `plugin/skills/onboard/SKILL.md` (8 references, including write instructions);
+  **all 10 spec files** that mention it (`01-overview`, `02-architecture`,
+  `04-scaffolding`, `05-scripts`, `06-separation-of-concerns`, `07-example`,
+  `09-glossary`, `diagrams`, `skill-onboard`, and this file); and every test
+  asserting the filename. Re-run the grep after the rename to confirm zero
+  residual `AGENT.md` (excluding deliberate historical mentions in `notes/`).
 - Drop `version:` from `skills/onboard|start|done|status/SKILL.md` frontmatter
   (currently `1.0.0`; `init-task.py`'s `SKILL_MD_TEMPLATE` emits `0.1.0` — drop
   there too).
@@ -235,10 +266,16 @@ level; create empty `pi/`; split `tests/` → `unit/` + `claude/` + `pi/`. Updat
 the Claude plugin manifest's `skills`/`scripts` paths per the Q5 decision.
 
 **Step 3 — Extract settings generation.** New `claude/settings-gen.py <dir>
-<level>` carrying the exact `permissions` blocks currently inlined in
-`init-class.py` (deny `Write(../**)`, `Write(./.class.yaml)`) and `init-task.py`
-(deny `Write(../**)`, `Write(./status.yaml)`). Make both init scripts
-`CADENCE_TRACK`-aware per Q3.
+<level>` carrying the exact `permissions` blocks currently inlined in the three
+scaffolders: `init-engagement.py` (root — allow-only, no deny), `init-class.py`
+(deny `Write(../**)`, `Write(./.class.yaml)`), and `init-task.py` (deny
+`Write(../**)`, `Write(./status.yaml)`). Make **all three** init scripts
+`CADENCE_TRACK`-aware per Q3 (each emits `.claude/` only on the claude track).
+Decide the Pi-track home for global tools: today `init-engagement.py` creates
+`root/.claude/tools/` and `load-context.py` reads it (line 189). Re-home to a
+track-neutral `root/tools/` (read by `load-context.py` on both tracks) so the
+global-tools convention survives without `.claude/` — and update the tool
+resolution order (task → class → global) accordingly in `load-context.py`.
 
 **Step 4 — Build the Pi extension.** `pi/extension/scope-gate.ts` (§3) + TS unit
 tests; `pi/plugin.json` (or `package.json "pi"` field per Q6 confirmation); set
@@ -252,9 +289,10 @@ bash-whitelist cases.
 `check-periods.py` reset → `/start` → `review_ready`) on Pi with a non-Anthropic
 model.
 
-**Step 7 — Documentation.** README two-lane install; update `spec/` files that
-reference `.claude/settings.json` (06-separation-of-concerns, 04-scaffolding) to
-describe both enforcement mechanisms.
+**Step 7 — Documentation.** README two-lane install; update the `spec/` files
+that reference `.claude/settings.json` (`05-scripts.md` and
+`06-separation-of-concerns.md` — confirmed via `grep -rl 'settings\.json' spec/`)
+to describe both enforcement mechanisms.
 
 ---
 

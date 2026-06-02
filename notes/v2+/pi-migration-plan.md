@@ -7,6 +7,12 @@
 
 This is a planning doc. A detailed spec follows once the shape is agreed.
 
+> **Promoted (2026-06-02):** the detailed spec now lives at
+> [`spec/pi-migration.md`](../../spec/pi-migration.md) — it resolves Q3–Q6
+> (§6 below) against the code and adds a per-file change list + test matrix.
+> The earlier `docs/pi-migration-strategy.md` (targeting the abandoned
+> `pi-mono` fork) has been removed; this plan + the spec are the live docs.
+
 ---
 
 ## 1. Goals

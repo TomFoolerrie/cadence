@@ -75,6 +75,7 @@ cadence/
 ├── notes/                   # Build specs for unimplemented features, dry run findings
 ├── docs/                    # Background research (landscape analysis, design outline)
 ├── engagement-template/     # Starter scaffold for new engagements (used by Cowork)
+├── test-artifacts/          # Sample inputs for manual dry runs (greenfield-manufacturing, oakwood-properties)
 ├── pyproject.toml           # Project config (cadence v0.1.0)
 └── venv/                    # Python virtual environment
 ```
