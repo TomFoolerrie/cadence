@@ -256,8 +256,9 @@ tests assert.
 **Whitelist derivation (plan §4 step 4 prerequisite):** sweep every bash
 invocation in the four `skills/*/SKILL.md` bodies and the `reference.md` template
 before finalizing `allowed`. Today's bodies emit `python ${...}/scripts/*.py`
-plus `git status`/`git add`/`git commit` — all covered — but the sweep is the
-source of truth, not this sentence.
+plus `git add`/`git commit`/`git checkout` (head `git`, all covered) — but the
+sweep is the source of truth, not this sentence. Gate on the `git` head, not a
+subcommand allowlist, so `git checkout` isn't accidentally blocked.
 
 ---
 

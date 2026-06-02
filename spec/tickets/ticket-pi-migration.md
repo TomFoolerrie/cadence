@@ -82,9 +82,14 @@ diffs and carry zero restructure risk. Land as one reviewable commit.
 - [ ] **Drop `version:`** from `plugin/skills/{onboard,start,done,status}/SKILL.md`
       frontmatter (currently `1.0.0`) and from `init-task.py`'s `SKILL_MD_TEMPLATE`
       (emits `0.1.0`). Pi requires only `name` + `description` — both already present.
-- [ ] **`check-periods.py` library refactor:** extract the core "is this task due"
-      logic into an importable function; the CLI becomes a thin wrapper. (Symphony
-      hedge + `.class.yaml` v2 foundation.)
+- [ ] **`check-periods.py` library refactor (non-trivial extraction).** The pure
+      period-math helpers (`next_period_string`, `compute_anchor_date`) are already
+      module-level, but the "is this task due" decision is currently **inline in
+      `main()`'s nested loop** (lines ~187–273), entangled with the filesystem walk,
+      the late-completion guard, the YAML write, and the per-class git commit.
+      Separate the filesystem walk from a **pure due-predicate** function, make the
+      predicate importable, and reduce the CLI to a thin wrapper. Add a direct unit
+      test for the predicate. (Symphony hedge + `.class.yaml` v2 foundation.)
 
 **Verify Phase 1:** `python -m pytest tests/` — all 299 green; `grep -rl 'AGENT\.md'`
 clean outside `notes/`; the new `check-periods` function has a direct unit test.
@@ -165,11 +170,17 @@ reference for the Pi `tool_call` event shape (`{toolName, input, toolCallId}` �
         (`python`/`python3`/`pip`/`git`/`ls`/`cat`/`head`/`tail`) + banned-pattern
         list (`rm -rf`, `sed -i`, redirect-to-root, `curl | sh`). **Derive the exact
         whitelist by sweeping every bash invocation in `skills/*/SKILL.md` + the
-        `reference.md` template** — the sweep is the source of truth, not the draft list.
+        `reference.md` template** — the sweep is the source of truth, not the draft
+        list. (The sweep surfaces `git add`/`git commit`/`git checkout` among others —
+        gate on the **head** `git`; do **not** tighten to a git-subcommand allowlist or
+        you risk blocking `git checkout`.)
   - [ ] **Fail-open** in record mode (a throwing handler would brick the tool); keep
-        the handler total. (Cadence's gate is a hard boundary on top of process trust,
+        the handler total. Cadence's gate is a hard boundary on top of process trust,
         not the containment boundary — revisit fail-closed only if running untrusted
-        models unsandboxed.)
+        models unsandboxed. **This intentionally diverges from pi-harness's
+        enforce-mode fail-*closed*:** pi-harness fails closed because it has a
+        container boundary to fall back on; Cadence does not, so failing closed on a
+        gate bug would brick legitimate work.
 - [ ] **Pi manifest (Q6):** add a `pi` key to the **repo-root `package.json`** —
       `"pi": { "extensions": ["./pi/extension"], "skills": ["./skills"] }`. **Not** a
       `pi/plugin.json`.
@@ -223,8 +234,8 @@ correct output — this is the proof the whole ticket exists for.
 
 ## Sequencing & risk
 
-1. **Phase 1 is the safe first commit** — pure cleanups, no restructure, 299 tests
-   the whole way. Ship it standalone.
+1. **Phase 1 is the safe first commit** — pure cleanups, no restructure; ends with
+   all 299 green. Ship it standalone.
 2. **Phases 2–3 are the Claude-track restructure** — host-verifiable with pytest;
    the Claude lane must stay byte-for-byte behavioural after each.
 3. **Phases 4–5 build + test the Pi track** — TS, no key needed for the unit tier.
