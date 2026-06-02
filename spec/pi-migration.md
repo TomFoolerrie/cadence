@@ -2,7 +2,7 @@
 
 **Status:** spec (promoted from [`notes/v2+/pi-migration-plan.md`](../notes/v2+/pi-migration-plan.md))
 **Date:** 2026-06-02
-**Supersedes for implementation purposes:** the planning doc's §6 Open Questions. Q3/Q4 are fully resolved below; Q5/Q6 are resolved *in approach*, each pending one external confirmation (§6).
+**Supersedes for implementation purposes:** the planning doc's §6 Open Questions. **Q3–Q6 are all fully resolved** below — Q5 (Cowork forbids `../` manifest paths → assemble-on-package) and Q6 (Pi manifest is a root `package.json` `pi` key, not `pi/plugin.json`) are confirmed against primary sources (§6).
 
 This spec turns the planning doc into a buildable work order: the open questions
 are resolved against the actual code, the per-file changes are enumerated, and a
@@ -120,44 +120,65 @@ to **must contain `scripts/`** (existing `reference.md` files embed
 loads. Therefore the Claude plugin must be *packaged* so its install root carries
 `scripts/` and `skills/`.
 
-**Packaging approach.** The repo's source-of-truth `scripts/` and `skills/` live
-at the top level (shared). The Claude plugin manifest at
-`claude/plugin/.claude-plugin/plugin.json` references them. Two acceptable
-mechanisms, decided at implementation:
-
-- **(Preferred) Path references in the manifest** if Cowork accepts manifest
-  `skills`/`scripts` paths that resolve outside the `.claude-plugin/` dir (e.g.
-  `"scripts": "../../scripts/"`). Zero duplication.
-- **(Fallback) Assemble-on-package**: a packaging step links/copies top-level
-  `scripts/` + `skills/` under `claude/plugin/` so the install root is
-  self-contained. Use only if Cowork rejects out-of-tree manifest paths.
+**Packaging approach — CONFIRMED: assemble-on-package is required.** The Claude
+Code / Cowork plugin spec mandates that all `plugin.json` paths "must be relative
+to the plugin root and start with `./`" — **upward (`../`) escaping is not
+supported**
+([plugins-reference](https://code.claude.com/docs/en/plugins-reference.md),
+"Path behavior rules"). So out-of-tree manifest paths are ruled out, and the
+packaging step **must assemble the plugin root**: link or copy the top-level
+`scripts/` + `skills/` under `claude/plugin/` (as `./scripts`, `./skills`) so the
+install root is self-contained and `${CLAUDE_PLUGIN_ROOT}` resolves to a dir that
+contains `scripts/`. The source of truth stays at the top level; `claude/plugin/`
+is assembled from it at package time (a thin build/symlink step), never
+hand-maintained.
 
 **What actually changes** is repo-internal and caught by tests: the Claude e2e
 suite (`tests/claude/`) asserts the generated `.claude/settings.json` content;
 unit tests that import scripts by path update to the hoisted location. The
 `engagement-template/` is regenerated through the same scripts, so it tracks
-automatically. **Resolve which packaging mechanism Cowork supports before
-landing the §4 step-2 restructure** (one quick check against Cowork plugin docs).
+automatically. The packaging/assembly step is the one new piece of Claude-track
+glue the restructure introduces (alongside `settings-gen.py`).
 
-### Q6 — Distribution → **two install paths, one repo**
+### Q6 — Distribution → **two install paths, one repo** (manifest format CONFIRMED)
 
 **Decision.**
 
-- **Pi track:** distribute as a Pi package consumed from the `pi/` subtree:
-  `pi install git:github.com/tomfoolerrie/cadence#<pi-branch>`. The extension's
-  default export is the `ExtensionFactory`; the skills ship alongside it.
-- **Claude track:** the existing Cowork plugin manifest at
-  `claude/plugin/.claude-plugin/plugin.json`, distributed exactly as today.
+- **Pi track:** a Pi package is declared by a **`pi` key in the repo-root
+  `package.json`** (verified by inspecting `@earendil-works/pi-coding-agent`
+  0.75.4's `core/package-manager.js` `readPiManifestFile`/`resolveExtensionEntries`
+  and its README "Pi Packages" section + `docs/packages.md`). There is **no
+  `pi/plugin.json`** — the planning doc's guess was wrong. Shape:
 
-**One external confirmation required before implementing the Pi manifest.** The
-sibling `pi-harness` *embeds* Pi via `createAgentSession({extensionFactories})`
-rather than *installing* a third-party Pi package, so it does not pin down the
-on-disk manifest key for a distributable extension. The two candidates are a
-`package.json` `"pi"` field versus a standalone `pi/plugin.json` (per the
-planning doc). **Confirm the exact key and
-skills-discovery convention against Pi 0.75.4's own docs/types**, then pin. This
-is the only unresolved external dependency in the migration; everything else is
-verified against the running pi-harness.
+  ```json
+  {
+    "name": "cadence",
+    "keywords": ["pi-package"],
+    "pi": { "extensions": ["./pi/extension"], "skills": ["./skills"] }
+  }
+  ```
+
+  Paths resolve relative to the package (repo) root; without a `pi` manifest Pi
+  auto-discovers conventional `extensions/`/`skills/`/`prompts/`/`themes/` dirs,
+  and an extension dir falls back to its `index.ts`/`index.js`. Install:
+  `pi install git:github.com/tomfoolerrie/cadence@<ref>` — Pi clones the **whole
+  repo** to `~/.pi/agent/git/` (or `.pi/git/` with `-l`) and reads the root
+  manifest. Pi packages run with **full system access** (README security note),
+  which is exactly why the §3 gate matters on this track.
+
+- **Claude track:** the assembled Cowork plugin (Q5) at
+  `claude/plugin/.claude-plugin/plugin.json`, distributed as today.
+
+**Asymmetry to exploit.** Because Pi resolves the manifest at the repo root and
+allows relative paths into the tree, the Pi `pi.skills` can point **directly at
+the shared top-level `skills/`** (`"./skills"`) with **no assembly** — unlike the
+Claude track, which must assemble (Q5). One shared `skills/`, two manifests:
+Claude assembles a copy under its plugin root, Pi references it in place.
+
+**Layout correction to the plan.** Plan §2 places a `pi/plugin.json`; replace
+that with the root-`package.json` `pi` key above. `pi/extension/` (the
+`ExtensionFactory` source) stays as the plan has it — only the manifest's name
+and location change. Both Q5 and Q6 are now fully resolved; see §6.
 
 ---
 
@@ -260,10 +281,12 @@ Each step keeps **all 299 Claude-track tests green**.
 - `check-periods.py`: extract core logic into an importable function; CLI becomes
   a thin wrapper (Symphony hedge + v2 foundation).
 
-**Step 2 — Restructure to the plan §2 layout.** *(Resolve Q5 packaging mechanism
-first.)* Move `plugin/` → `claude/plugin/`; hoist `skills/` + `scripts/` to top
-level; create empty `pi/`; split `tests/` → `unit/` + `claude/` + `pi/`. Update
-the Claude plugin manifest's `skills`/`scripts` paths per the Q5 decision.
+**Step 2 — Restructure to the plan §2 layout.** Move `plugin/` →
+`claude/plugin/`; hoist `skills/` + `scripts/` to top level; create empty `pi/`;
+split `tests/` → `unit/` + `claude/` + `pi/`. Add the **assemble step** (Q5) that
+links/copies top-level `scripts/` + `skills/` under `claude/plugin/` as
+`./scripts`/`./skills` (Cowork forbids `../` manifest paths). The Pi manifest
+needs no assembly — it references `./skills` from the root `package.json` (Q6).
 
 **Step 3 — Extract settings generation.** New `claude/settings-gen.py <dir>
 <level>` carrying the exact `permissions` blocks currently inlined in the three
@@ -278,8 +301,9 @@ global-tools convention survives without `.claude/` — and update the tool
 resolution order (task → class → global) accordingly in `load-context.py`.
 
 **Step 4 — Build the Pi extension.** `pi/extension/scope-gate.ts` (§3) + TS unit
-tests; `pi/plugin.json` (or `package.json "pi"` field per Q6 confirmation); set
-`CADENCE_TRACK=pi` for permitted bash calls.
+tests; declare the package via a `pi` key in the **repo-root `package.json`**
+(`"pi": { "extensions": ["./pi/extension"], "skills": ["./skills"] }`, Q6 — *not*
+a `pi/plugin.json`); set `CADENCE_TRACK=pi` for permitted bash calls.
 
 **Step 5 — Pi e2e tests.** `tests/pi/` mirrors `tests/claude/`: assert the gate
 blocks every scenario `.claude/settings.json` blocks today, plus the new
@@ -317,14 +341,25 @@ assertions — those move to `tests/claude/`).
 
 ---
 
-## 6. Residual external dependencies (must confirm before coding the relevant step)
+## 6. External dependencies — all confirmed (2026-06-02)
 
-1. **Pi distributable manifest key** (Q6) — `package.json "pi"` field vs
-   `pi/plugin.json`, and the skills-discovery convention, against Pi 0.75.4.
-   *Blocks Step 4's `pi/plugin.json`.*
-2. **Cowork out-of-tree manifest paths** (Q5) — whether `plugin.json` may point
-   `skills`/`scripts` outside `.claude-plugin/`, or packaging must assemble.
-   *Blocks Step 2's restructure landing.*
+Both items the planning doc left open are now resolved against primary sources;
+nothing in this spec is blocked on an unverified external assumption.
 
-Everything else is verified against the running pi-harness and the current
-Cadence code.
+1. **Pi distributable manifest** (Q6) — **RESOLVED.** It is a `pi` key in the
+   repo-root `package.json` (`{ "pi": { "extensions": [...], "skills": [...] } }`),
+   *not* a `pi/plugin.json`. Verified by inspecting `@earendil-works/pi-coding-agent`
+   0.75.4 (`core/package-manager.js`: `readPiManifestFile` reads `pkg.pi`,
+   `resolveExtensionEntries` resolves `manifest.extensions` relative to the package
+   dir with an `index.ts`/`index.js` fallback) plus the package README "Pi Packages"
+   section and `docs/packages.md`. Paths may reference the shared top-level
+   `skills/` directly; no assembly needed on this track.
+2. **Cowork manifest path rules** (Q5) — **RESOLVED.** `plugin.json` paths "must be
+   relative to the plugin root and start with `./`"; `../` escaping is unsupported
+   ([plugins-reference](https://code.claude.com/docs/en/plugins-reference.md),
+   "Path behavior rules"). Therefore the Claude track **must assemble** `scripts/`
+   + `skills/` under the plugin root at package time (Step 2).
+
+Everything else is verified against the running pi-harness (runtime API), the
+pinned Pi package (distribution), the Claude Code docs (Cowork packaging), and
+the current Cadence code (script behavior).
