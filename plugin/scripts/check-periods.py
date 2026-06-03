@@ -19,6 +19,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import NamedTuple
 
 import yaml
 
@@ -160,6 +161,58 @@ def compute_anchor_date(
 
 
 # ---------------------------------------------------------------------------
+# Reset decision (pure — no filesystem, no git, no I/O)
+# ---------------------------------------------------------------------------
+
+class ResetDecision(NamedTuple):
+    """The outcome of evaluating whether a terminal task is due to reset.
+
+    ``due`` is the predicate result (today has reached the next anchor).
+    ``next_period`` is the period the task would reset *to*, and
+    ``anchor_date`` is the (late-completion-adjusted) anchor that decision
+    was made against. Both are well-defined whether or not ``due`` is True.
+    """
+    due: bool
+    next_period: str
+    anchor_date: date
+
+
+def decide_reset(
+    current_period: str,
+    period_format: str,
+    anchor: str,
+    done_at: date,
+    today: date,
+) -> ResetDecision:
+    """Decide whether a completed task is due for reset, and to which period.
+
+    Pure function over the period math: given the task's current period, its
+    schedule (``period_format`` + ``anchor``), when it was completed
+    (``done_at``), and the reference date (``today``), return a
+    :class:`ResetDecision`. No filesystem, YAML, or git — the caller owns I/O.
+
+    Applies the one-ahead anchor with the late-completion guard: if the task
+    was finished after its next anchor had already passed, the cycle is pushed
+    one further so a late completion does not immediately re-arm.
+    """
+    next_per = next_period_string(current_period, period_format)
+    anchor_date = compute_anchor_date(current_period, period_format, anchor)
+
+    # Late-completion guard: if the task was finished after the anchor already
+    # passed, push to the next cycle.
+    if anchor_date <= done_at:
+        skipped_per = next_per
+        next_per = next_period_string(next_per, period_format)
+        anchor_date = compute_anchor_date(skipped_per, period_format, anchor)
+
+    return ResetDecision(
+        due=today >= anchor_date,
+        next_period=next_per,
+        anchor_date=anchor_date,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -231,25 +284,18 @@ def main() -> int:
 
                 current_period = status_data.get("period", "")
 
-                # Compute next period and anchor date (one-ahead)
-                next_per = next_period_string(current_period, period_format)
-                anchor_date = compute_anchor_date(
-                    current_period, period_format, anchor,
-                )
-
-                # Late-completion guard: if the task was finished after
-                # the anchor already passed, push to the next cycle.
                 done_at = datetime.fromisoformat(
                     done_at_str.replace("Z", "+00:00")
                 ).date()
-                if anchor_date <= done_at:
-                    skipped_per = next_per
-                    next_per = next_period_string(next_per, period_format)
-                    anchor_date = compute_anchor_date(
-                        skipped_per, period_format, anchor,
-                    )
 
-                if today >= anchor_date:
+                # Pure decision: is this task due, and for which period?
+                decision = decide_reset(
+                    current_period, period_format, anchor, done_at, today,
+                )
+                next_per = decision.next_period
+                anchor_date = decision.anchor_date
+
+                if decision.due:
                     schema_version = status_data.get("schema_version", 1)
 
                     new_status = {

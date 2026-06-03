@@ -109,9 +109,9 @@ def main() -> int:
 
     output_parts: list[str] = []
 
-    # --- Root AGENT.md (always included) ---
-    root_agent = read_file(root / "AGENT.md")
-    output_parts.append(section("root/AGENT.md", root_agent))
+    # --- Root AGENTS.md (always included) ---
+    root_agent = read_file(root / "AGENTS.md")
+    output_parts.append(section("root/AGENTS.md", root_agent))
 
     if args.level == "root":
         print("\n".join(output_parts).rstrip())
@@ -123,8 +123,8 @@ def main() -> int:
         print("Not in a class directory", file=sys.stderr)
         return 1
 
-    class_agent = read_file(class_dir / "AGENT.md")
-    output_parts.append(section("class/AGENT.md", class_agent))
+    class_agent = read_file(class_dir / "AGENTS.md")
+    output_parts.append(section("class/AGENTS.md", class_agent))
 
     if args.level == "class":
         if args.orchestrator:

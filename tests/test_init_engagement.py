@@ -2,7 +2,7 @@
 Contract tests for init-engagement.py
 
 Spec: init-engagement.py <path> [--name <engagement-name>]
-- Creates: .context-root, AGENT.md, .claude/tools/, .gitignore, requirements.txt
+- Creates: .context-root, AGENTS.md, .claude/tools/, .gitignore, requirements.txt
 - Runs git init and creates initial commit
 - If --name not provided, derives name from directory basename
 - Exit codes: 0 = success, 1 = validation error, 2 = system error
@@ -35,7 +35,7 @@ class TestCreatesEngagementDirectory:
 
         assert target.is_dir()
         assert (target / ".context-root").is_file()
-        assert (target / "AGENT.md").is_file()
+        assert (target / "AGENTS.md").is_file()
         assert (target / ".claude" / "tools").is_dir()
         assert (target / ".gitignore").is_file()
         assert (target / "requirements.txt").is_file()
@@ -60,7 +60,7 @@ class TestCreatesEngagementDirectory:
         target = tmp_path / "acme-corp"
         run_script("init-engagement.py", [str(target)])
 
-        content = (target / "AGENT.md").read_text()
+        content = (target / "AGENTS.md").read_text()
         assert "# Acme Corp" in content
         assert "## Entity Details" in content
 
@@ -68,7 +68,7 @@ class TestCreatesEngagementDirectory:
         target = tmp_path / "acme"
         run_script("init-engagement.py", [str(target), "--name", "Acme Corporation"])
 
-        content = (target / "AGENT.md").read_text()
+        content = (target / "AGENTS.md").read_text()
         assert "# Acme Corporation" in content
 
     def test_gitignore_content(self, tmp_path):

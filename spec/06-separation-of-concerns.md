@@ -3,8 +3,8 @@
 | Layer | What | Who Manages | User Touches |
 |-------|------|-------------|--------------|
 | **Plugin internals** | Skills (/onboard, /start, /done, /status), scripts, plugin manifest | Plugin system (cached in `~/.claude/plugins/`) | No |
-| **Root context** | AGENT.md (root), global tools, global dependencies | Human (initial setup) + agent (maintenance) | Once (setup) |
-| **Classes** | .class.yaml, AGENT.md, class tools, class dependencies | Agent (via conversation) + orchestrator (future) | Navigational + status checks |
+| **Root context** | AGENTS.md (root), global tools, global dependencies | Human (initial setup) + agent (maintenance) | Once (setup) |
+| **Classes** | .class.yaml, AGENTS.md, class tools, class dependencies | Agent (via conversation) + orchestrator (future) | Navigational + status checks |
 | **Tasks** | SKILL.md, learned.md, status.yaml, tools, periods | Agent (executes) + human (reviews) | **This is where the user lives** |
 | **Period work** | data/, workpapers/, review-notes/ | Agent (creates) + human (provides source data via Cowork UI, reviews outputs) | Per cycle |
 
@@ -45,7 +45,7 @@ Each Claude agent is **write-scoped to its own working level**, with **read acce
 
 **Key rules:**
 
-- A task agent in `treasury/monthly-bank-fees/` can read `root/AGENT.md` and `treasury/AGENT.md` but cannot write to them. It writes only within `treasury/monthly-bank-fees/`.
+- A task agent in `treasury/monthly-bank-fees/` can read `root/AGENTS.md` and `treasury/AGENTS.md` but cannot write to them. It writes only within `treasury/monthly-bank-fees/`.
 - Scripts invoked by the agent (e.g., `set-status.py`, `init-period.py`, `init-task.py`) operate with their own filesystem permissions and can write wherever their contracts specify. Scripts are infrastructure — they are not bound by the agent's write scope.
 - `/onboard` (task-level) needs class-level write scope because it adds the new task to `.class.yaml`'s manifest (Step 8). This is appropriate — the onboarding agent operates from the class directory.
 - The agent must never directly edit `status.yaml` — all status transitions go through `set-status.py`. The agent must never directly edit `.class.yaml` manifest entries outside of `/onboard`.

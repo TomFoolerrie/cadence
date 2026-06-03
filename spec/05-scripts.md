@@ -29,7 +29,7 @@ For general failure behavior (exit codes, side-effect guarantees), see Section 6
 ```
 <path>/
 ├── .context-root       ← engagement: <name>, schema_version: 1
-├── AGENT.md            ← template with # <name>, ## Entity Details
+├── AGENTS.md            ← template with # <name>, ## Entity Details
 ├── .claude/
 │   ├── tools/          ← empty directory
 │   └── settings.json   ← write scope: allow Read and Write(./*)
@@ -89,11 +89,11 @@ If `git` is not available or any git command fails, exits 2.
 Prints each file with section headers. Order is always top-down (root first, task last).
 
 ```
-── root/AGENT.md ──
-<contents of root AGENT.md>
+── root/AGENTS.md ──
+<contents of root AGENTS.md>
 
-── class/AGENT.md ──
-<contents of class AGENT.md>
+── class/AGENTS.md ──
+<contents of class AGENTS.md>
 
 ── SKILL.md ──
 <contents of SKILL.md>
@@ -117,7 +117,7 @@ The `── tools ──` section is only printed at `--level task`. It lists to
 
 **With `--orchestrator` flag** (only valid with `--level class`):
 
-Appends `.class.yaml` contents after class AGENT.md:
+Appends `.class.yaml` contents after class AGENTS.md:
 
 ```
 ── .class.yaml ──
@@ -289,7 +289,7 @@ Subcommand-based interface:
 ```
 <name>/
 ├── .class.yaml         ← schema_version: 1, name: <Name>, description: "", manifest: []
-├── AGENT.md            ← template with ## What This Class Covers, ## Key Concepts
+├── AGENTS.md            ← template with ## What This Class Covers, ## Key Concepts
 ├── .claude/
 │   └── settings.json   ← write scope: allow Write(./**), deny Write(../**) and Write(./.class.yaml)
 ├── tools/              ← empty directory
@@ -569,7 +569,7 @@ Runs five scripts in sequence from the current (task) directory:
 
 Runs two scripts in sequence from the current (class) directory:
 
-1. **`load-context.py --level class`** — Loads root AGENT.md and class AGENT.md.
+1. **`load-context.py --level class`** — Loads root AGENTS.md and class AGENTS.md.
 2. **`init-task.py <task-name>`** — Scaffolds the task directory.
 
 If `load-context.py` fails, `init-task.py` is not run (no partial state).

@@ -5,7 +5,6 @@ description: >
   "where do things stand," "what's the progress," or "show me the
   dashboard." Read-only dashboard that scans task status files within
   a class and presents a human-readable progress rollup.
-version: 1.0.0
 ---
 
 # Status Dashboard

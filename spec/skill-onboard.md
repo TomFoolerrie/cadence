@@ -17,7 +17,7 @@ version: 1.0.0
 
 Transfer knowledge of recurring work from a human preparer to Claude. `/onboard` is **level-aware** — it detects whether it's being run from the engagement root or from a class directory and executes the appropriate flow.
 
-- **From root:** Creates a new class (brief interview → AGENT.md).
+- **From root:** Creates a new class (brief interview → AGENTS.md).
 - **From class:** Creates a new task (deep interview → SKILL.md, learned.md, tools, first-period execution).
 - **From task directory (or other):** Not supported. If the current directory contains neither `.context-root` nor `.class.yaml`, tell the user: *"Run `/onboard` from the engagement root to create a class, or from a class directory to create a task."* Stop.
 
@@ -28,7 +28,7 @@ The goal of task-level onboarding is to produce a self-contained work folder tha
 ## Constraints
 
 - **Scripts are mandatory.** Never create directories with mkdir or modify YAML files directly. All scaffolding goes through `init-*.py` scripts. All YAML state changes go through `set-status.py` or `edit-class-yaml.py`. The scripts validate inputs and enforce the schema.
-- **Markdown files are the exception.** SKILL.md, learned.md, and AGENT.md are written directly by the agent — these are content files, not state files.
+- **Markdown files are the exception.** SKILL.md, learned.md, and AGENTS.md are written directly by the agent — these are content files, not state files.
 
 ---
 
@@ -46,7 +46,7 @@ Run when the user wants to create a new class of work (e.g., "I want to set up t
 load-context.py --level root
 ```
 
-Loads the engagement's root `AGENT.md` so the agent understands the entity context.
+Loads the engagement's root `AGENTS.md` so the agent understands the entity context.
 
 #### Step 1 — Name the Class
 
@@ -60,17 +60,17 @@ Map the answer to a kebab-case folder name (e.g., "Treasury" → `treasury`, "Or
 init-class.py <name>
 ```
 
-Creates the class directory with `.class.yaml` (empty manifest), `AGENT.md` (template), `tools/`, and `requirements.txt`.
+Creates the class directory with `.class.yaml` (empty manifest), `AGENTS.md` (template), `tools/`, and `requirements.txt`.
 
 #### Step 3 — Interview
 
-Brief conversation to populate `AGENT.md`. Ask:
+Brief conversation to populate `AGENTS.md`. Ask:
 
 1. **What does this class cover?** — One or two sentences. What group of work does it represent?
-2. **Key domain concepts?** — Terms, conventions, or rules that task agents working in this class need to know. Keep it short — AGENT.md is loaded into every task session in this class.
+2. **Key domain concepts?** — Terms, conventions, or rules that task agents working in this class need to know. Keep it short — AGENTS.md is loaded into every task session in this class.
 3. **Any shared data sources or systems?** — Systems that multiple tasks in this class will access (e.g., "Chase portal for all treasury work").
 
-Write the answers into `AGENT.md`. Keep it **minimal by design** — just enough for task agents to understand their broader context. If it's getting long, the information probably belongs in a task's SKILL.md.
+Write the answers into `AGENTS.md`. Keep it **minimal by design** — just enough for task agents to understand their broader context. If it's getting long, the information probably belongs in a task's SKILL.md.
 
 #### Step 4 — Finalize
 
@@ -97,7 +97,7 @@ Run when the user wants to teach Claude how to do a specific recurring task.
 load-context.py --level class
 ```
 
-Loads root `AGENT.md` and class `AGENT.md` so the agent understands the engagement and class context.
+Loads root `AGENTS.md` and class `AGENTS.md` so the agent understands the engagement and class context.
 
 #### Step 1 — Name the Task
 
@@ -267,7 +267,7 @@ Tell the user: *"Task onboarded. SKILL.md and tools are committed. Run `/start` 
 - **First period execution is inline.** Onboard executes the first period directly — it does not delegate to `/start`. This keeps onboard's full write scope active so it can iterate on SKILL.md and tools if execution reveals problems. `/start` is used for all subsequent periods.
 - **`/done` completes the first period.** After the user reviews the output, they run `/done` in the same conversation. `/done` captures review feedback, seeds `learned.md`, sets `done`, commits, and archives. This is the same `/done` flow used for every subsequent period.
 - **Scripts gate all YAML mutations.** The agent never directly edits `.class.yaml` or `status.yaml`. Use `edit-class-yaml.py` for manifest changes and `set-status.py` for status transitions.
-- **AGENT.md stays minimal.** Class-level AGENT.md should be concise. If information is specific to one task, it belongs in that task's SKILL.md.
+- **AGENTS.md stays minimal.** Class-level AGENTS.md should be concise. If information is specific to one task, it belongs in that task's SKILL.md.
 - **Token cost awareness.** SKILL.md and learned.md are loaded every period. Keep them focused. Avoid duplicating information between sections or between files.
 
 ---

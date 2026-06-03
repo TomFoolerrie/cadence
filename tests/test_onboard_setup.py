@@ -58,9 +58,9 @@ class TestHappyPath:
         result = run_onboard_setup(cls, "monthly-bank-fees")
         assert result.returncode == 0
 
-        # load-context --level class prints root and class AGENT.md
-        assert "root/AGENT.md" in result.stdout
-        assert "class/AGENT.md" in result.stdout
+        # load-context --level class prints root and class AGENTS.md
+        assert "root/AGENTS.md" in result.stdout
+        assert "class/AGENTS.md" in result.stdout
 
     def test_status_yaml_is_not_started(self, tmp_path):
         root = make_context_root(tmp_path)
@@ -110,7 +110,7 @@ class TestPreconditionFailures:
         (cls / ".class.yaml").write_text(
             "schema_version: 1\nname: Orphan\ndescription: ''\nmanifest: []\n"
         )
-        (cls / "AGENT.md").write_text("# Orphan\n")
+        (cls / "AGENTS.md").write_text("# Orphan\n")
 
         result = run_onboard_setup(cls, "some-task")
         assert result.returncode == 2
@@ -130,7 +130,7 @@ class TestNoPartialState:
         (cls / ".class.yaml").write_text(
             "schema_version: 1\nname: Orphan\ndescription: ''\nmanifest: []\n"
         )
-        (cls / "AGENT.md").write_text("# Orphan\n")
+        (cls / "AGENTS.md").write_text("# Orphan\n")
 
         run_onboard_setup(cls, "some-task")
 

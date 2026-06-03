@@ -6,7 +6,6 @@ description: >
   human review feedback after /start or /onboard. Updates learned.md,
   may propose SKILL.md changes, fixes output if corrected, sets done,
   and archives to Google Drive.
-version: 1.0.0
 ---
 
 # /done

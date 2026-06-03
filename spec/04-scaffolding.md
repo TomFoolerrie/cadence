@@ -25,7 +25,7 @@ accounting-plugin/
     └── status/SKILL.md             ← class progress dashboard
 ```
 
-`init-engagement.py` generates the engagement root structure from inline templates — there is no separate template directory. It creates `.context-root`, `AGENT.md`, `.claude/tools/`, `.gitignore`, `requirements.txt`, initializes git, and creates the engagement venv.
+`init-engagement.py` generates the engagement root structure from inline templates — there is no separate template directory. It creates `.context-root`, `AGENTS.md`, `.claude/tools/`, `.gitignore`, `requirements.txt`, initializes git, and creates the engagement venv.
 
 ### `${CLAUDE_PLUGIN_ROOT}`
 
@@ -38,16 +38,16 @@ User:    Installs plugin, opens a folder in Cowork
 Agent:   Copies engagement-template/ into the folder
 Agent:   Writes .context-root YAML (engagement name + schema_version)
 Agent:   git init, initial commit
-Agent:   "Fill in AGENT.md with your entity details and
+Agent:   "Fill in AGENTS.md with your entity details and
           I'll take it from there."
 
-User:    Fills in AGENT.md (entity name, fiscal year, etc.)
+User:    Fills in AGENTS.md (entity name, fiscal year, etc.)
 Agent:   git commit -m "Configure engagement context"
 
 User:    "I want to set up treasury work"
 Agent:   Runs /onboard from root level → creates class
 Agent:   Runs init-class.py treasury
-Agent:   Interviews user → writes AGENT.md (minimal: what this class is, key concepts)
+Agent:   Interviews user → writes AGENTS.md (minimal: what this class is, key concepts)
 Agent:   git commit -m "Onboard class: treasury"
 
 User:    "I want to teach you how we do monthly bank fees"
@@ -78,7 +78,7 @@ init-class.py <name>
 ```
 <name>/
 ├── .class.yaml         ← orchestration manifest (empty, no tasks yet)
-├── AGENT.md            ← class context template (minimal)
+├── AGENTS.md            ← class context template (minimal)
 ├── tools/              ← empty, for class-level shared tools
 └── requirements.txt    ← empty, for class-level Python dependencies
 ```
@@ -93,7 +93,7 @@ description: ""
 manifest: []
 ```
 
-**`AGENT.md` template** (name is interpolated from the argument):
+**`AGENTS.md` template** (name is interpolated from the argument):
 
 ```markdown
 # <Name>
@@ -109,7 +109,7 @@ manifest: []
 
 **Validation:** The script checks that `.context-root` exists in the current directory (confirms you're at the engagement root) and that the target directory doesn't already exist. It exits with an error if either check fails.
 
-AGENT.md is **minimal by design**. It provides just enough context for task agents to understand what class they're operating in — not a comprehensive domain manual. It grows organically as tasks are onboarded and patterns emerge, but should stay concise. If AGENT.md is getting long, the information probably belongs in a task's SKILL.md instead.
+AGENTS.md is **minimal by design**. It provides just enough context for task agents to understand what class they're operating in — not a comprehensive domain manual. It grows organically as tasks are onboarded and patterns emerge, but should stay concise. If AGENTS.md is getting long, the information probably belongs in a task's SKILL.md instead.
 
 ## 6.4 Adding Tasks
 
@@ -221,7 +221,7 @@ The `/onboard` skill then does the real work: it walks the human preparer throug
 
 1. **Step 0 — Load context:** `load-context.py --level root` loads engagement context.
 2. **Step 1 — Create class:** `init-class.py <name>` scaffolds the class directory.
-3. **Step 2 — Interview:** Brief conversation with the user about what this class of work covers, key domain concepts, and conventions. Writes AGENT.md (kept minimal — just enough for task agents to understand their broader context).
+3. **Step 2 — Interview:** Brief conversation with the user about what this class of work covers, key domain concepts, and conventions. Writes AGENTS.md (kept minimal — just enough for task agents to understand their broader context).
 4. **Finalize:** Git commit.
 
 The user can then navigate into the new class and `/onboard` a task.
@@ -407,7 +407,7 @@ During scaffolding, the agent runs:
 
 ```
 git init
-git add .context-root AGENT.md .claude/ .gitignore requirements.txt
+git add .context-root AGENTS.md .claude/ .gitignore requirements.txt
 git add treasury/ reporting/ ...
 git commit -m "Initial scaffold by accounting plugin"
 ```
@@ -426,7 +426,7 @@ git commit -m "Initial scaffold by accounting plugin"
 .DS_Store
 ```
 
-The structural files — `.context-root`, `.class.yaml`, `AGENT.md`, `status.yaml` (task level), `SKILL.md`, `learned.md`, `tools/` — **are tracked**. Period review notes (feedback that feeds into learned.md) **are tracked**. Source data inputs in `periods/*/data/` **are not tracked** (they come from external systems and may be large). Workpapers in `periods/*/workpapers/` **are not tracked** — they are generated outputs that can be reproduced by re-running the task, and may include large binary files (`.xlsx`, `.pdf`). `archive-period.py` uploads workpapers and data to Google Drive when a period is completed (called by `/done` after commit).
+The structural files — `.context-root`, `.class.yaml`, `AGENTS.md`, `status.yaml` (task level), `SKILL.md`, `learned.md`, `tools/` — **are tracked**. Period review notes (feedback that feeds into learned.md) **are tracked**. Source data inputs in `periods/*/data/` **are not tracked** (they come from external systems and may be large). Workpapers in `periods/*/workpapers/` **are not tracked** — they are generated outputs that can be reproduced by re-running the task, and may include large binary files (`.xlsx`, `.pdf`). `archive-period.py` uploads workpapers and data to Google Drive when a period is completed (called by `/done` after commit).
 
 This means the git history captures the *orchestration structure, state, procedures, learnings, and review feedback* — everything needed to reproduce work, without the bulk of generated outputs.
 

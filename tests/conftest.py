@@ -34,7 +34,6 @@ SKILL_MD_TEMPLATE = """\
 name: {name}
 description: >
   TODO — describe what this folder produces.
-version: 0.1.0
 ---
 
 # {name}
@@ -179,8 +178,8 @@ def make_context_root(
         "schema_version": schema_version,
     })
 
-    # AGENT.md
-    (path / "AGENT.md").write_text(
+    # AGENTS.md
+    (path / "AGENTS.md").write_text(
         AGENT_MD_ROOT_TEMPLATE.format(engagement=engagement)
     )
 
@@ -211,7 +210,7 @@ def make_class(
     manifest: Optional[List[Dict]] = None,
 ) -> Path:
     """
-    Create a class directory under root with .class.yaml, AGENT.md, tools/, requirements.txt.
+    Create a class directory under root with .class.yaml, AGENTS.md, tools/, requirements.txt.
     Returns path to the class directory.
     """
     if manifest is None:
@@ -236,9 +235,9 @@ def make_class(
         "manifest": manifest,
     })
 
-    # AGENT.md
+    # AGENTS.md
     class_name = name.replace("-", " ").title()
-    (class_dir / "AGENT.md").write_text(
+    (class_dir / "AGENTS.md").write_text(
         AGENT_MD_CLASS_TEMPLATE.format(name=class_name)
     )
 
@@ -385,7 +384,7 @@ def run_check_periods(cwd, as_of=None):
 
 @pytest.fixture
 def engagement_root(tmp_path):
-    """Minimal engagement root with .context-root, AGENT.md, requirements.txt, .claude/tools/."""
+    """Minimal engagement root with .context-root, AGENTS.md, requirements.txt, .claude/tools/."""
     return make_context_root(tmp_path)
 
 

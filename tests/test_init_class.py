@@ -2,7 +2,7 @@
 Contract tests for init-class.py
 
 Spec: init-class.py <name> (run from engagement root)
-- Creates: .class.yaml, AGENT.md, tools/, requirements.txt
+- Creates: .class.yaml, AGENTS.md, tools/, requirements.txt
 - Preconditions: .context-root exists in cwd, target directory does not exist
 - Exit codes: 0 = success, 1 = precondition failed, 2 = filesystem error
 - Not idempotent
@@ -33,7 +33,7 @@ class TestCreatesClassDirectory:
         class_dir = engagement_root / "treasury"
         assert class_dir.is_dir()
         assert (class_dir / ".class.yaml").is_file()
-        assert (class_dir / "AGENT.md").is_file()
+        assert (class_dir / "AGENTS.md").is_file()
         assert (class_dir / "tools").is_dir()
         assert (class_dir / "requirements.txt").is_file()
 
@@ -49,14 +49,14 @@ class TestCreatesClassDirectory:
     def test_agent_md_contains_template_sections(self, engagement_root):
         run_script("init-class.py", ["treasury"], cwd=engagement_root)
 
-        content = (engagement_root / "treasury" / "AGENT.md").read_text()
+        content = (engagement_root / "treasury" / "AGENTS.md").read_text()
         assert "## What This Class Covers" in content
         assert "## Key Concepts" in content
 
     def test_agent_md_name_interpolation(self, engagement_root):
         run_script("init-class.py", ["order-to-cash"], cwd=engagement_root)
 
-        content = (engagement_root / "order-to-cash" / "AGENT.md").read_text()
+        content = (engagement_root / "order-to-cash" / "AGENTS.md").read_text()
         assert "# Order To Cash" in content
 
     def test_requirements_txt_is_empty(self, engagement_root):

@@ -1,6 +1,6 @@
 # Ticket: Pi migration — two tracks, one repo
 
-**Status:** NOT STARTED — spec complete, all open questions resolved, ready to build.
+**Status:** IN PROGRESS — Phase 1 (in-place cleanups) done; Phases 2–7 not started.
 **Source of truth:** [`spec/pi-migration.md`](../pi-migration.md) (detailed spec — the *how*) and [`notes/v2+/pi-migration-plan.md`](../../notes/v2+/pi-migration-plan.md) (the planning doc — the *why*).
 
 > **Rollup (2026-06-02).** The detailed spec is written and **every external
@@ -66,7 +66,17 @@ doc §8, deferred); `.class.yaml` v2 (separate plan, sequenced after this).
 
 ## Phase 1 — In-place cleanups (no structural move)  ← the safe first commit
 
-> **STATUS: NOT STARTED.** Host-verifiable with pytest alone; no Pi, no key.
+> **STATUS: DONE (2026-06-03).** All three cleanups landed; suite green at
+> **304 passed** (the original 299 + 5 new `decide_reset` predicate tests). The
+> `AGENT.md→AGENTS.md` grep sweep is clean outside `notes/` and the two
+> migration meta-docs (which quote the literal as the rename *instruction*).
+> One incidental fix: `test_e2e_period_reset.py::test_done_then_check_periods_resets`
+> was a latent **date-bomb** — `start_to_done` stamps `done_at` from the wall
+> clock, so once the real date passed the test's `as_of` the late-completion
+> guard fired an extra hop and the asserted reset period drifted. Pinned that
+> test's `done_at` to a deterministic on-time value; the other period-reset
+> tests assert only status (or set `done_at` explicitly) and were already
+> robust. Host-verifiable with pytest alone; no Pi, no key.
 
 **Why first:** these are harness-neutral improvements that shrink the later
 diffs and carry zero restructure risk. Land as one reviewable commit.

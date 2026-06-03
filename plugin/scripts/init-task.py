@@ -22,7 +22,6 @@ SKILL_MD_TEMPLATE = """\
 name: {name}
 description: >
   TODO — describe what this folder produces.
-version: 0.1.0
 ---
 
 # {name}

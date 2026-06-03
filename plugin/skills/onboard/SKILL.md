@@ -6,7 +6,6 @@ description: >
   transfer from a human preparer to Claude. Level-aware: from root
   creates a class, from a class creates a task with first-period
   validation.
-version: 1.0.0
 ---
 
 # /onboard
@@ -16,7 +15,7 @@ version: 1.0.0
 - **Scripts are mandatory.** Never create directories with mkdir or modify YAML files directly.
   All scaffolding goes through `init-*.py` scripts. All YAML state changes go through
   `set-status.py` or `edit-class-yaml.py`. The scripts validate inputs and enforce the schema.
-- **Markdown files are the exception.** SKILL.md, learned.md, and AGENT.md are written directly
+- **Markdown files are the exception.** SKILL.md, learned.md, and AGENTS.md are written directly
   by the agent — these are content files, not state files.
 
 ## Step 0 — Detect Level
@@ -39,7 +38,7 @@ Run:
 python ${CLAUDE_PLUGIN_ROOT}/scripts/load-context.py --level root
 ```
 
-This loads the engagement's root AGENT.md so you understand the entity context.
+This loads the engagement's root AGENTS.md so you understand the entity context.
 
 ### Step 2 — Name the Class
 
@@ -55,17 +54,17 @@ Run (substituting the kebab-case name from Step 2):
 python ${CLAUDE_PLUGIN_ROOT}/scripts/init-class.py <name>
 ```
 
-This creates the class directory with `.class.yaml`, `AGENT.md` (template), `tools/`, and `requirements.txt`.
+This creates the class directory with `.class.yaml`, `AGENTS.md` (template), `tools/`, and `requirements.txt`.
 
-### Step 4 — Interview for AGENT.md
+### Step 4 — Interview for AGENTS.md
 
-Conduct a brief interview to populate the class AGENT.md. Ask these questions:
+Conduct a brief interview to populate the class AGENTS.md. Ask these questions:
 
 1. *"What does this class cover?"* -- One or two sentences describing the group of work it represents.
 2. *"What are the key domain concepts?"* -- Terms, conventions, or rules that task agents in this class need to know. Keep it short.
 3. *"Any shared data sources or systems?"* -- Systems that multiple tasks in this class will access (e.g., "Chase portal for all treasury work").
 
-Write the answers into `<class>/AGENT.md`. Keep it minimal by design -- just enough for task agents to understand their broader context. If content is getting long, it probably belongs in a task's SKILL.md instead.
+Write the answers into `<class>/AGENTS.md`. Keep it minimal by design -- just enough for task agents to understand their broader context. If content is getting long, it probably belongs in a task's SKILL.md instead.
 
 ### Step 5 — Finalize
 
@@ -96,7 +95,7 @@ Run (substituting the kebab-case name from Step 1):
 python ${CLAUDE_PLUGIN_ROOT}/scripts/onboard-setup.py <name>
 ```
 
-This loads class context (root AGENT.md + class AGENT.md) and scaffolds the task directory with SKILL.md (template), learned.md (template), status.yaml, tools/, periods/, and requirements.txt.
+This loads class context (root AGENTS.md + class AGENTS.md) and scaffolds the task directory with SKILL.md (template), learned.md (template), status.yaml, tools/, periods/, and requirements.txt.
 
 The loaded context is printed to stdout — read it to understand what class you are onboarding into.
 
@@ -265,5 +264,5 @@ Tell the user: *"Task onboarded. SKILL.md and tools are committed. Run `/start` 
 - **/onboard stops at review_ready.** The onboarding commit covers scaffolding, interview artifacts, and the first period output. It does not set `done` or capture learnings -- that is `/done`'s job.
 - **First period execution is inline.** Onboard executes the first period directly -- it does not delegate to `/start`. This keeps full write scope active so you can iterate on SKILL.md and tools if execution reveals problems. `/start` is used for all subsequent periods.
 - **/done completes the first period.** After the user reviews the output, they run `/done` in the same conversation. `/done` captures review feedback, seeds learned.md, sets `done`, commits, and archives.
-- **AGENT.md stays minimal.** Class-level AGENT.md should be concise. If information is specific to one task, it belongs in that task's SKILL.md.
+- **AGENTS.md stays minimal.** Class-level AGENTS.md should be concise. If information is specific to one task, it belongs in that task's SKILL.md.
 - **Token cost awareness.** SKILL.md and learned.md are loaded every period. Keep them focused. Do not duplicate information between sections or between files.

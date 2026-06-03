@@ -16,7 +16,7 @@ Agent:   Reads status.yaml → routes (not_started → normal execution)
 Agent:   Sets in_progress via set-status.py
 Agent:   Installs dependencies (install-deps.py)
 Agent:   Scaffolds periods/2026-03/ (init-period.py)
-Agent:   Loads context: root/AGENT.md → treasury/AGENT.md → SKILL.md + learned.md
+Agent:   Loads context: root/AGENTS.md → treasury/AGENTS.md → SKILL.md + learned.md
 Agent:   Pulls Chase statement from data/
 Agent:   Runs chase_parser.py → fee_categorizer.py → je_formatter.py
 Agent:   Writes draft JE to workpapers/

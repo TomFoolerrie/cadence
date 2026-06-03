@@ -5,14 +5,14 @@
 ```
 engagement-root/                    <- ROOT
 ├── .context-root                   <- root marker (YAML: engagement name, schema version)
-├── AGENT.md                        <- root context (entity details)
+├── AGENTS.md                        <- root context (entity details)
 ├── requirements.txt                <- global dependencies
 ├── venv/                           <- Python virtual environment (created by init-venv.py)
 ├── .claude/
 │   └── tools/                      <- global shared tools
 ├── treasury/                       <- CLASS
 │   ├── .class.yaml                 <- orchestration manifest (tasks, order)
-│   ├── AGENT.md                    <- class context for task agents
+│   ├── AGENTS.md                    <- class context for task agents
 │   ├── requirements.txt            <- class-level dependencies
 │   ├── tools/                      <- class-level shared tools
 │   └── monthly-bank-fees/          <- TASK
@@ -28,12 +28,12 @@ engagement-root/                    <- ROOT
 │               └── review-notes/   <- feedback
 ├── reporting/                      <- CLASS
 │   ├── .class.yaml
-│   ├── AGENT.md
+│   ├── AGENTS.md
 │   ├── tools/
 │   └── ...
 └── collections/                    <- CLASS
     ├── .class.yaml
-    ├── AGENT.md
+    ├── AGENTS.md
     └── ...
 ```
 
@@ -48,7 +48,7 @@ The root is the engagement folder -- the top-level directory the user mounts in 
 | File | Purpose |
 |------|---------|
 | `.context-root` | Root marker file. A YAML file containing the engagement name and schema version. Used by `load-context.py` to locate the engagement root when walking up the directory tree. Prevents collision with other `.claude/` directories in parent paths. Schema: `engagement: "Acme Corp"`, `schema_version: 1`. |
-| `AGENT.md` | Root-level context -- entity name, fiscal year, reporting basis, materiality, systems, key contacts. Loaded into every session regardless of which task is being worked. |
+| `AGENTS.md` | Root-level context -- entity name, fiscal year, reporting basis, materiality, systems, key contacts. Loaded into every session regardless of which task is being worked. |
 | `requirements.txt` | Global Python dependencies shared across all classes and tasks. |
 | `.claude/tools/` | Global shared tools (e.g., JE formatter, PDF parser) available to all tasks. |
 | `.gitignore` | What git tracks vs. ignores. |
@@ -58,14 +58,14 @@ The user rarely interacts at the root level after initial setup. The root is con
 
 ## 3. Class Level
 
-A class groups related work. Treasury, reporting, procure-to-pay, order-to-cash, collections -- each is a class. Classes are created via `/onboard` from the root level, which runs `init-class.py` to scaffold the directory and conducts a brief interview to populate AGENT.md. A class has two defining files: `.class.yaml` (orchestration manifest -- tasks and execution order) and `AGENT.md` (class context that flows down to task agents). AGENT.md is **minimal by design** -- just enough for task agents to understand their broader context, not a comprehensive domain manual.
+A class groups related work. Treasury, reporting, procure-to-pay, order-to-cash, collections -- each is a class. Classes are created via `/onboard` from the root level, which runs `init-class.py` to scaffold the directory and conducts a brief interview to populate AGENTS.md. A class has two defining files: `.class.yaml` (orchestration manifest -- tasks and execution order) and `AGENTS.md` (class context that flows down to task agents). AGENTS.md is **minimal by design** -- just enough for task agents to understand their broader context, not a comprehensive domain manual.
 
 **Key files:**
 
 | File | Purpose |
 |------|---------|
 | `.class.yaml` | Orchestration manifest. Declares tasks and execution order. **What to run.** Read by the orchestrator and skills -- not loaded into task agent context. |
-| `AGENT.md` | Class context for task agents. Describes what this class of work is, key domain concepts, shared conventions. **Loaded into every task session within this class.** |
+| `AGENTS.md` | Class context for task agents. Describes what this class of work is, key domain concepts, shared conventions. **Loaded into every task session within this class.** |
 | `requirements.txt` | Class-level Python dependencies shared across tasks in this class. |
 | `tools/` | Class-level shared tools (e.g., a Chase statement parser shared across all treasury journal entries). |
 
@@ -95,7 +95,7 @@ manifest:
 
 The manifest is what an orchestrator reads. Today a human picks a task. Tomorrow an orchestrator agent reads `.class.yaml` and processes it phase by phase -- all order-1 tasks run in parallel, and once all phase 1 tasks complete, order-2 tasks start. No phase 2 task runs until every phase 1 task is done. Each task gets a fresh sub-agent that reads the task folder and executes.
 
-**`AGENT.md`** describes what this class of work is -- domain concepts, shared conventions, key contacts, anything a task agent needs to understand its broader context. Unlike `.class.yaml` (which is orchestration machinery), `AGENT.md` is written for the agent that *executes* tasks. The `/onboard` skill populates it initially; it evolves as the class matures.
+**`AGENTS.md`** describes what this class of work is -- domain concepts, shared conventions, key contacts, anything a task agent needs to understand its broader context. Unlike `.class.yaml` (which is orchestration machinery), `AGENTS.md` is written for the agent that *executes* tasks. The `/onboard` skill populates it initially; it evolves as the class matures.
 
 Note: `enabled` in `.class.yaml` is **membership** -- is this task part of the active roster? Status is tracked at the task level in `status.yaml` (execution state). Class-level status is computed on the fly by `/status`, which reads all task `status.yaml` files and derives a rollup.
 
@@ -206,25 +206,25 @@ Context flows downward through the hierarchy. A task agent automatically sees it
 
 **Task level** (`--level task`):
 ```
-root/AGENT.md -> class/AGENT.md -> SKILL.md + learned.md + status.yaml [+ recovery hint if blocked]
+root/AGENTS.md -> class/AGENTS.md -> SKILL.md + learned.md + status.yaml [+ recovery hint if blocked]
 ```
 
 **Class level** (`--level class`):
 ```
-root/AGENT.md -> class/AGENT.md
+root/AGENTS.md -> class/AGENTS.md
 ```
 
 **Class level as orchestrator** (`--level class --orchestrator`) *(future state)*:
 ```
-root/AGENT.md -> class/AGENT.md -> .class.yaml (manifest)
+root/AGENTS.md -> class/AGENTS.md -> .class.yaml (manifest)
 ```
 
 **Root level** (`--level root`):
 ```
-root/AGENT.md
+root/AGENTS.md
 ```
 
-Task agents and class-level agents both receive `AGENT.md` (class context). Class agents do NOT receive `.class.yaml` by default. The `--orchestrator` flag additionally loads `.class.yaml` including the manifest. This keeps non-orchestrator agents focused on *what to do* without exposing manifest details they don't need.
+Task agents and class-level agents both receive `AGENTS.md` (class context). Class agents do NOT receive `.class.yaml` by default. The `--orchestrator` flag additionally loads `.class.yaml` including the manifest. This keeps non-orchestrator agents focused on *what to do* without exposing manifest details they don't need.
 
 ### `load-context.py` Behavior
 
@@ -265,7 +265,7 @@ Dependencies follow the same pattern. Global `requirements.txt` for shared libra
 
 ## 7. Hierarchy Depth
 
-The hierarchy is exactly three levels deep: **root -> class -> task**. There is exactly one directory level between the root and each task. `load-context.py` relies on this structure -- it walks up from the task's cwd, finds `AGENT.md` in the parent (class), and `.context-root` in the grandparent (root). Nested subdirectories within a class (e.g., `treasury/subcategory/monthly-bank-fees/`) are not supported and will break context loading.
+The hierarchy is exactly three levels deep: **root -> class -> task**. There is exactly one directory level between the root and each task. `load-context.py` relies on this structure -- it walks up from the task's cwd, finds `AGENTS.md` in the parent (class), and `.context-root` in the grandparent (root). Nested subdirectories within a class (e.g., `treasury/subcategory/monthly-bank-fees/`) are not supported and will break context loading.
 
 ## 8. Orchestration Model
 
@@ -275,7 +275,7 @@ The human picks tasks, navigates to the task folder, runs `/start`, reviews the 
 
 The data model (`.class.yaml` manifests, phase ordering) is in place for future automation, but nothing reads it for automated execution in MVP.
 
-**Class creation:** Before working on tasks, the user creates classes via `/onboard` from the root level. This runs `init-class.py` to scaffold the class directory and conducts a brief interview to populate AGENT.md. Classes are created on demand, not pre-built in the engagement template.
+**Class creation:** Before working on tasks, the user creates classes via `/onboard` from the root level. This runs `init-class.py` to scaffold the class directory and conducts a brief interview to populate AGENTS.md. Classes are created on demand, not pre-built in the engagement template.
 
 **Concurrency:** In MVP, the human drives one task at a time in a single conversation, so concurrent writes cannot occur. The orchestrator (future state) addresses concurrency for the automated multi-task case.
 

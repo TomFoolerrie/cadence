@@ -6,7 +6,6 @@ description: >
   Executes a task for the current period — loads context, runs the
   procedure, produces a draft, and sets review_ready. Also handles
   recovery from blocked and rejected states.
-version: 1.0.0
 ---
 
 # /start — Execute Task for Current Period

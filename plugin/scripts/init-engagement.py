@@ -90,8 +90,8 @@ def main() -> int:
         with open(target / ".context-root", "w") as f:
             yaml.dump(context_root_data, f, default_flow_style=False, sort_keys=False)
 
-        # AGENT.md
-        (target / "AGENT.md").write_text(
+        # AGENTS.md
+        (target / "AGENTS.md").write_text(
             AGENT_MD_TEMPLATE.format(engagement=engagement_name)
         )
 

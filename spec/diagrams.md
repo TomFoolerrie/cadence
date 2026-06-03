@@ -6,7 +6,7 @@
 graph TD
     ROOT["<b>ROOT</b><br/>Engagement Context"]
     ROOT --- RC1[".context-root<br/><i>engagement name</i>"]
-    ROOT --- RC2["AGENT.md<br/><i>entity details</i>"]
+    ROOT --- RC2["AGENTS.md<br/><i>entity details</i>"]
     ROOT --- RC3[".claude/tools/<br/><i>global tools</i>"]
     ROOT --- RC4["requirements.txt<br/><i>global deps</i>"]
 
@@ -15,7 +15,7 @@ graph TD
     ROOT ==> CLASS3["<b>CLASS: collections/</b>"]
 
     CLASS1 --- CC1[".class.yaml<br/><i>orchestration manifest</i>"]
-    CLASS1 --- CC2["AGENT.md<br/><i>class context for agents</i>"]
+    CLASS1 --- CC2["AGENTS.md<br/><i>class context for agents</i>"]
     CLASS1 --- CC4["tools/<br/><i>class-shared tools</i>"]
 
     CLASS1 ==> TASK1["<b>TASK: monthly-bank-fees/</b>"]
@@ -135,11 +135,11 @@ stateDiagram-v2
 ```mermaid
 flowchart TB
     subgraph ROOT_CTX ["Root Context"]
-        ENG["AGENT.md (root)<br/><i>entity, fiscal year, materiality, systems</i>"]
+        ENG["AGENTS.md (root)<br/><i>entity, fiscal year, materiality, systems</i>"]
     end
 
     subgraph CLASS_CTX ["Class Context"]
-        AGENT["AGENT.md (class)<br/><i>domain concepts, conventions</i>"]
+        AGENT["AGENTS.md (class)<br/><i>domain concepts, conventions</i>"]
         CLASSYAML[".class.yaml<br/><i>manifest, task list, phase order</i>"]
     end
 
@@ -152,16 +152,16 @@ flowchart TB
     ENG -->|"Always loaded"| AGENT
     ENG -.->|"Orchestrator only"| CLASSYAML
 
-    AGENT -->|"Task agents get class AGENT.md<br/>(not .class.yaml)"| SKILL
+    AGENT -->|"Task agents get class AGENTS.md<br/>(not .class.yaml)"| SKILL
     AGENT --> LEARNED
     AGENT --> STATUS
 
     CLASSYAML -.->|"Orchestrator only<br/>(future state)"| ORCH["Orchestrator Agent"]
 
     subgraph LOAD ["load-context.py"]
-        LR["--level root<br/>root/AGENT.md"]
-        LC["--level class<br/>root/AGENT.md → class/AGENT.md"]
-        LT["--level task<br/>root/AGENT.md → class/AGENT.md →<br/>SKILL.md + learned.md + status.yaml"]
+        LR["--level root<br/>root/AGENTS.md"]
+        LC["--level class<br/>root/AGENTS.md → class/AGENTS.md"]
+        LT["--level task<br/>root/AGENTS.md → class/AGENTS.md →<br/>SKILL.md + learned.md + status.yaml"]
     end
 
     style ROOT_CTX fill:#e3f2fd,stroke:#1565c0
@@ -199,7 +199,7 @@ sequenceDiagram
     Note over S,FS: Checks status is in_progress,<br/>creates period dir.
     S->>FS: Create periods/2026-03/{data,workpapers,review-notes}
     A->>S: load-context.py --level task
-    S->>FS: Read root/AGENT.md → class/AGENT.md → SKILL.md + learned.md + status.yaml
+    S->>FS: Read root/AGENTS.md → class/AGENTS.md → SKILL.md + learned.md + status.yaml
     S-->>A: Assembled context
 
     A->>FS: Read data, run tools, produce draft
@@ -233,7 +233,7 @@ sequenceDiagram
 
     H->>O: "Run the close"
     O->>FS: load-context.py --level class --orchestrator
-    FS-->>O: root/AGENT.md → class/AGENT.md → .class.yaml (with manifest)
+    FS-->>O: root/AGENTS.md → class/AGENTS.md → .class.yaml (with manifest)
 
     Note over O: Phase 1: order=1 tasks<br/>(parallel execution)
 

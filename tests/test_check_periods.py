@@ -11,6 +11,10 @@ Spec: check-periods.py [--as-of YYYY-MM-DD] (run from engagement root, via cron)
 - Exit codes: 0 = success, 1 = not at root, 2 = filesystem/YAML error
 """
 
+import importlib.util
+from datetime import date
+from pathlib import Path
+
 import pytest
 
 from conftest import (
@@ -26,6 +30,18 @@ from conftest import (
 
 
 pytestmark = pytest.mark.mid
+
+
+def _load_check_periods():
+    """Import check-periods.py as a module (its filename is not a valid identifier)."""
+    path = Path(__file__).resolve().parent.parent / "plugin" / "scripts" / "check-periods.py"
+    spec = importlib.util.spec_from_file_location("check_periods", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+check_periods = _load_check_periods()
 
 
 # ---------------------------------------------------------------------------
@@ -665,3 +681,62 @@ class TestOneAheadAnchor:
         data = read_yaml(cls / "t" / "status.yaml")
         assert data["status"] == "not_started"
         assert data["period"] == "2026-05"
+
+
+# ---------------------------------------------------------------------------
+# Pure decide_reset predicate (no filesystem / git / YAML)
+# ---------------------------------------------------------------------------
+
+
+class TestDecideResetPredicate:
+    """Direct unit tests of the importable due-predicate extracted from main()."""
+
+    def test_due_after_anchor_monthly(self):
+        # period 2026-03, first_monday → anchor = first Monday of April = Apr 6.
+        # done_at before anchor; today on/after anchor → due, resets to 2026-04.
+        d = check_periods.decide_reset(
+            "2026-03", "monthly", "first_monday",
+            done_at=date(2026, 4, 1), today=date(2026, 4, 6),
+        )
+        assert d.due is True
+        assert d.next_period == "2026-04"
+        assert d.anchor_date == date(2026, 4, 6)
+
+    def test_not_due_before_anchor_monthly(self):
+        # Same schedule, but today is before the anchor → not due.
+        d = check_periods.decide_reset(
+            "2026-03", "monthly", "first_monday",
+            done_at=date(2026, 4, 1), today=date(2026, 4, 5),
+        )
+        assert d.due is False
+        assert d.next_period == "2026-04"
+        assert d.anchor_date == date(2026, 4, 6)
+
+    def test_late_completion_pushes_one_cycle(self):
+        # done_at (Apr 30) is AFTER the next anchor (Apr 6) → guard pushes the
+        # cycle forward: next_period 2026-04 → 2026-05, anchor → first Mon of May.
+        d = check_periods.decide_reset(
+            "2026-03", "monthly", "first_monday",
+            done_at=date(2026, 4, 30), today=date(2026, 5, 4),
+        )
+        assert d.due is True
+        assert d.next_period == "2026-05"
+        assert d.anchor_date == date(2026, 5, 4)
+
+    def test_quarterly_first_anchor(self):
+        # Q1 → next Q2, first Monday of April (first month of Q2) = Apr 6.
+        d = check_periods.decide_reset(
+            "2026-Q1", "quarterly", "first_monday",
+            done_at=date(2026, 1, 15), today=date(2026, 4, 6),
+        )
+        assert d.due is True
+        assert d.next_period == "2026-Q2"
+        assert d.anchor_date == date(2026, 4, 6)
+
+    def test_anchor_equal_to_today_is_due(self):
+        # Boundary: today == anchor_date counts as due (>=).
+        d = check_periods.decide_reset(
+            "2026-03", "monthly", "first_monday",
+            done_at=date(2026, 4, 1), today=date(2026, 4, 6),
+        )
+        assert d.due is True

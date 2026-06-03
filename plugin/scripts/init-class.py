@@ -53,7 +53,7 @@ def main() -> int:
         with open(target / ".class.yaml", "w") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
-        # AGENT.md
+        # AGENTS.md
         agent_md = (
             f"# {title}\n"
             "\n"
@@ -63,7 +63,7 @@ def main() -> int:
             "## Key Concepts\n"
             "<!-- Shared conventions for task agents -->\n"
         )
-        (target / "AGENT.md").write_text(agent_md)
+        (target / "AGENTS.md").write_text(agent_md)
 
         # tools/
         (target / "tools").mkdir()

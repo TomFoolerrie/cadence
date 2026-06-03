@@ -38,8 +38,13 @@ class TestPeriodResetWorkflow:
         ])
         task = make_task(cls, "bank-fees")
 
-        # Complete the task
+        # Complete the task. start_to_done stamps done_at with the wall clock;
+        # pin it to a deterministic on-time value (before the April anchor) so
+        # this test does not depend on when it is run.
         start_to_done(task, "2026-03")
+        status = read_yaml(task / "status.yaml")
+        status["done_at"] = "2026-04-01T00:00:00Z"
+        write_yaml(task / "status.yaml", status)
 
         # Run check-periods past the anchor date
         result = run_check_periods(root, as_of="2026-05-05")

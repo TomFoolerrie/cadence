@@ -160,7 +160,7 @@ class TestContextOutput:
         assert result.returncode == 0
 
         # load-context.py prints section headers
-        assert "root/AGENT.md" in result.stdout
+        assert "root/AGENTS.md" in result.stdout
         assert "SKILL.md" in result.stdout
         assert "status.yaml" in result.stdout
 

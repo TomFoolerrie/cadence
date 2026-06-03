@@ -6,10 +6,10 @@
 
 | Term | Definition |
 |------|-----------|
-| **Root** | The top-level engagement folder. Contains `.context-root` (a YAML file with `engagement` and `schema_version` fields) and `AGENT.md`. Provides entity context loaded into every session. |
-| **Class** | A group of related work (e.g., treasury, reporting, collections). Contains `.class.yaml` (orchestration manifest) and `AGENT.md` (class context for agents). |
+| **Root** | The top-level engagement folder. Contains `.context-root` (a YAML file with `engagement` and `schema_version` fields) and `AGENTS.md`. Provides entity context loaded into every session. |
+| **Class** | A group of related work (e.g., treasury, reporting, collections). Contains `.class.yaml` (orchestration manifest) and `AGENTS.md` (class context for agents). |
 | **Task** | An individual unit of work within a class (e.g., monthly-bank-fees). Contains SKILL.md, learned.md, status.yaml, tools/, and periods/. This is where the user lives. |
-| **Engagement** | The entity or client being worked on. Defined in root-level `AGENT.md`. |
+| **Engagement** | The entity or client being worked on. Defined in root-level `AGENTS.md`. |
 | **Period** | A date-keyed execution cycle within a task (e.g., `2026-03`). The period string refers to the **period being closed**, not the current calendar period — e.g., period `2026-03` is worked on in April (closing March's books). Each period gets its own `data/`, `workpapers/`, and `review-notes/` directories. |
 | **Manifest** | The `manifest` section of `.class.yaml`. Lists tasks, their execution order, enabled status, and period format. Read by the orchestrator (future) and skills. |
 | **Skill** | A user-facing command (`/onboard`, `/start`, `/done`, `/status`) that composes scripts and agent behavior into a workflow. Skills live in the plugin. |
@@ -20,7 +20,7 @@
 | **Hierarchy** | The root/class/task folder structure on the user's filesystem. Owned by the user, not the plugin. Any runtime that reads markdown/YAML can execute it. |
 | **SKILL.md** | The operating manual for a task. Describes what to produce, where data comes from, step-by-step procedure, and validation rules. Changes require human approval. |
 | **learned.md** | Accumulated patterns and review history for a task. Agent-managed. Counters are optional metadata. Agent consolidates when the file gets long. |
-| **AGENT.md** | Context file used at both root and class levels. Root-level `AGENT.md` contains entity details (name, fiscal year, materiality, systems). Class-level `AGENT.md` describes what the class covers, key domain concepts, and shared conventions. Consistent naming across levels. Minimal by design — grows organically but stays concise. |
+| **AGENTS.md** | Context file used at both root and class levels. Root-level `AGENTS.md` contains entity details (name, fiscal year, materiality, systems). Class-level `AGENTS.md` describes what the class covers, key domain concepts, and shared conventions. Consistent naming across levels. Minimal by design — grows organically but stays concise. |
 | **status.yaml** | Task-level execution state file. Fields: `schema_version`, `period`, `status`, `issues`, `done_at`. See `03-status-machine.md` for transitions and `05-scripts.md` for the `set-status.py` contract. |
 | **review_ready** | A task status indicating the agent completed execution and produced a draft. See `03-status-machine.md` for transition rules. |
 | **.class.yaml** | Orchestration manifest for a class. Declares tasks, execution order, and enabled status. Read by skills and the orchestrator, not loaded into task agent context. |

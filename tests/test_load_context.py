@@ -3,7 +3,7 @@ Contract tests for load-context.py
 
 Spec: load-context.py --level root|class|task [--orchestrator]
 - Walks up from cwd to find .context-root
-- Assembles context top-down: root AGENT.md → class AGENT.md → task files
+- Assembles context top-down: root AGENTS.md → class AGENTS.md → task files
 - --orchestrator adds .class.yaml content (only valid with --level class)
 - Blocked status appends recovery hint
 - Tool paths printed in resolution order (task > class > global)
@@ -48,7 +48,7 @@ class TestLevelFiltering:
     def test_level_root_loads_only_root_agent_md(self, engagement_root):
         result = run_load_context(engagement_root, "root")
         assert result.returncode == 0
-        assert "AGENT.md" in result.stdout
+        assert "AGENTS.md" in result.stdout
         # Should NOT contain class or task content
         assert "SKILL.md" not in result.stdout
 
@@ -56,7 +56,7 @@ class TestLevelFiltering:
         result = run_load_context(class_dir, "class")
         assert result.returncode == 0
 
-        # Both root and class AGENT.md should appear
+        # Both root and class AGENTS.md should appear
         assert "Test Corp" in result.stdout  # root content
         assert "Treasury" in result.stdout   # class content
 
@@ -65,8 +65,8 @@ class TestLevelFiltering:
         assert result.returncode == 0
 
         # Root, class, and task files should all appear
-        assert "Test Corp" in result.stdout         # root AGENT.md
-        assert "Treasury" in result.stdout           # class AGENT.md
+        assert "Test Corp" in result.stdout         # root AGENTS.md
+        assert "Treasury" in result.stdout           # class AGENTS.md
         assert "## Purpose" in result.stdout         # SKILL.md
         assert "## Review History" in result.stdout  # learned.md
 
