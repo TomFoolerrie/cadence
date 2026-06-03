@@ -1,6 +1,6 @@
 # Ticket: Pi migration — two tracks, one repo
 
-**Status:** IN PROGRESS — Phases 1–3 done (cleanups, restructure, settings-gen + CADENCE_TRACK); Phases 4–7 not started.
+**Status:** IN PROGRESS — Phases 1–5 done (cleanups, restructure, settings-gen + CADENCE_TRACK, Pi gate + manifest, parity tests); Phase 6 (live dry run) needs Pi + a non-Anthropic key; Phase 7 (docs) pending.
 **Source of truth:** [`spec/pi-migration.md`](../pi-migration.md) (detailed spec — the *how*) and [`notes/v2+/pi-migration-plan.md`](../../notes/v2+/pi-migration-plan.md) (the planning doc — the *why*).
 
 > **Rollup (2026-06-02).** The detailed spec is written and **every external
@@ -187,8 +187,23 @@ both tracks. All 299 still green.
 
 ## Phase 4 — Build the Pi extension (the tool_call gate) + Pi manifest
 
-> **STATUS: NOT STARTED.** Needs Node + a one-time `npm install` for `tsx`; the gate
-> unit tests need no key/container.
+> **STATUS: DONE (2026-06-03).** Built `pi/extension/policy.ts` (pure, SDK-free
+> classifier — the security-critical core), `scope-gate.ts` (the
+> `ExtensionFactory` on `pi.on("tool_call")`, fail-open), and `index.ts`
+> (`export default makeScopeGate()` — the loader takes the module's default
+> export). Added the `pi` manifest to a new **root `package.json`**
+> (`extensions: ["./pi/extension"]`, `skills: ["./skills"]`). The factory sets
+> `process.env.CADENCE_TRACK = "pi"` so bash children skip `.claude/`. **Bash
+> whitelist derived from the sweep** — beyond the spec draft it adds `cd` +
+> `source` (skills emit `cd <dir> && …` and `source <root>/venv/bin/activate &&
+> …`); gate keys on the `git` HEAD (not a subcommand allowlist), and banned
+> patterns scan the whole command so a compound can't smuggle one in.
+> **Verified against the REAL Pi machinery (0.75.4, installed as a devDep):**
+> `loadExtensions(["./pi/extension"])` → `errors: []`, 1 extension loaded;
+> `loadSkillsFromDir({dir:"skills"})` → all 4 skills, no diagnostics (confirms
+> Q6 "no assembly on Pi" + that dropping `version:` didn't break loading).
+> `npm run test:gate` = 22 green; `npm run typecheck` clean. Remaining for a
+> live run (Phase 6): `pi install git:…` + a billed model turn.
 
 **Reuse prior art:** the sibling `pi-harness` `gate/gate.ts` is the verified
 reference for the Pi `tool_call` event shape (`{toolName, input, toolCallId}` →
@@ -228,7 +243,16 @@ load) discovers the extension + skills from the root manifest.
 
 ## Phase 5 — Pi-track e2e tests
 
-> **STATUS: NOT STARTED.**
+> **STATUS: DONE (2026-06-03).** The §5 parity table is fully covered, split by
+> language: the **gate** parity (write-above-root, direct `status.yaml`/
+> `.class.yaml` write → block + corrective reason; bash whitelist allow for
+> `python`/`pip`/`git`; banned-pattern block; Q4 `install-deps.py`/`pip install`
+> pass; fail-open fault-injection) lives in the TS suite
+> `pi/extension/policy.test.ts` + `scope-gate.test.ts` (22 tests) — *beside the
+> gate*, since the gate is TypeScript. The **scaffolding** parity
+> (`CADENCE_TRACK=pi` → no `.claude/` at root/class/task; global tools load from
+> the re-homed `root/tools/`) lives in the Python `tests/pi/test_no_claude_artifacts.py`
+> (landed in Phase 3). Together they cover every `tests/pi/` row of the matrix.
 
 - [ ] **`tests/pi/`** mirrors `tests/claude/`: assert the gate **blocks every
       scenario `.claude/settings.json` blocks today** (write-above-root,

@@ -1,3 +1,6 @@
+# Node (Pi track TS tooling — devDeps for tests + typecheck)
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]

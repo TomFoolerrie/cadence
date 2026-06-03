@@ -1,0 +1,21 @@
+{
+  "name": "cadence",
+  "version": "0.1.0",
+  "description": "3-level context hierarchy for recurring professional workflows. Two tracks: a Claude/Cowork plugin and a Pi package.",
+  "keywords": ["pi-package", "workflow", "knowledge-transfer", "context-hierarchy"],
+  "license": "MIT",
+  "pi": {
+    "extensions": ["./pi/extension"],
+    "skills": ["./skills"]
+  },
+  "scripts": {
+    "test:gate": "node --import tsx --test pi/extension/policy.test.ts pi/extension/scope-gate.test.ts",
+    "test": "npm run test:gate",
+    "typecheck": "tsc --noEmit --skipLibCheck --strict --target es2022 --module nodenext --moduleResolution nodenext --allowImportingTsExtensions pi/extension/policy.ts pi/extension/scope-gate.ts pi/extension/index.ts"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.75.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
