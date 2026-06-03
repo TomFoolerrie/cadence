@@ -1,6 +1,6 @@
 # Ticket: Pi migration — two tracks, one repo
 
-**Status:** IN PROGRESS — Phase 1 (in-place cleanups) done; Phases 2–7 not started.
+**Status:** IN PROGRESS — Phases 1–2 done (cleanups + two-track restructure); Phases 3–7 not started.
 **Source of truth:** [`spec/pi-migration.md`](../pi-migration.md) (detailed spec — the *how*) and [`notes/v2+/pi-migration-plan.md`](../../notes/v2+/pi-migration-plan.md) (the planning doc — the *why*).
 
 > **Rollup (2026-06-02).** The detailed spec is written and **every external
@@ -106,7 +106,17 @@ clean outside `notes/`; the new `check-periods` function has a direct unit test.
 
 ## Phase 2 — Restructure to the two-track layout
 
-> **STATUS: NOT STARTED.** Q5 (assemble-on-package) resolved, so this is unblocked.
+> **STATUS: DONE (2026-06-03).** `plugin/scripts` + `plugin/skills` hoisted to
+> top-level `scripts/` + `skills/`; the Cowork manifest moved to
+> `claude/plugin/.claude-plugin/plugin.json`; `pi/extension/` created; `tests/`
+> split into `unit/` + `claude/` + `pi/` with the shared `conftest.py` kept at
+> the `tests/` root (avoids the duplicate-conftest import pitfall). The
+> assemble-on-package step is `claude/assemble.py` — it symlinks (or `--copy`s)
+> the shared `scripts/`/`skills/` under `claude/plugin/` as `./scripts`/`./skills`
+> (gitignored, never hand-maintained), so `${CLAUDE_PLUGIN_ROOT}` resolves to a
+> dir containing `scripts/`. The settings.json-asserting tests still live in
+> `tests/unit/` for now; Phase 3 relocates them to `tests/claude/`. Suite green
+> at **304 passed** from the new locations.
 
 **Target layout** (planning doc §2, with the Q6 manifest correction):
 

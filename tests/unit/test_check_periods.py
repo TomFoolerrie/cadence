@@ -13,11 +13,11 @@ Spec: check-periods.py [--as-of YYYY-MM-DD] (run from engagement root, via cron)
 
 import importlib.util
 from datetime import date
-from pathlib import Path
 
 import pytest
 
 from conftest import (
+    SCRIPTS_DIR,
     make_class,
     make_context_root,
     make_task,
@@ -34,7 +34,7 @@ pytestmark = pytest.mark.mid
 
 def _load_check_periods():
     """Import check-periods.py as a module (its filename is not a valid identifier)."""
-    path = Path(__file__).resolve().parent.parent / "plugin" / "scripts" / "check-periods.py"
+    path = SCRIPTS_DIR / "check-periods.py"
     spec = importlib.util.spec_from_file_location("check_periods", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

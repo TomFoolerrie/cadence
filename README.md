@@ -66,19 +66,24 @@ Class status is always derived on the fly from task statuses — never stored.
 
 ```
 cadence/
-├── plugin/                  # The Cowork plugin
-│   ├── .claude-plugin/      #   Plugin manifest (plugin.json)
-│   ├── scripts/             #   14 Python scripts (infrastructure)
-│   └── skills/              #   4 skill definitions (SKILL.md files)
-├── spec/                    # Design specification (source of truth)
-├── tests/                   # 299 unit + e2e tests
-├── notes/                   # Build specs for unimplemented features, dry run findings
-├── docs/                    # Background research (landscape analysis, design outline)
-├── engagement-template/     # Starter scaffold for new engagements (used by Cowork)
-├── test-artifacts/          # Sample inputs for manual dry runs (greenfield-manufacturing, oakwood-properties)
-├── pyproject.toml           # Project config (cadence v0.1.0)
-└── venv/                    # Python virtual environment
+├── scripts/                # 14 Python scripts (shared, harness-agnostic)
+├── skills/                 # 4 skill definitions (shared SKILL.md files)
+├── claude/                 # Claude/Cowork glue
+│   ├── plugin/             #   Plugin root — .claude-plugin/ + assembled ./scripts, ./skills
+│   └── assemble.py         #   Assembles the plugin root from the shared dirs
+├── pi/                     # Pi-harness glue (extension/ — the tool_call gate)
+├── spec/                   # Design specification (source of truth)
+├── tests/                  # unit/ (shared) + claude/ + pi/, with a shared conftest.py
+├── notes/                  # Build specs for unimplemented features, dry run findings
+├── docs/                   # Background research (landscape analysis, design outline)
+├── engagement-template/    # Starter scaffold for new engagements (used by Cowork)
+├── test-artifacts/         # Sample inputs for manual dry runs (greenfield-manufacturing, oakwood-properties)
+├── pyproject.toml          # Project config (cadence v0.1.0)
+└── venv/                   # Python virtual environment
 ```
+
+The migration to two tracks (Cowork + Pi) over one shared spine is in progress —
+see `spec/tickets/ticket-pi-migration.md`.
 
 ## Plugin Structure
 

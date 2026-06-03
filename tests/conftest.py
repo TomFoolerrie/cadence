@@ -24,7 +24,7 @@ import yaml
 # ---------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SCRIPTS_DIR = PROJECT_ROOT / "plugin" / "scripts"
+SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 
 DEFAULT_ENGAGEMENT = "Test Corp"
 DEFAULT_SCHEMA_VERSION = 1
