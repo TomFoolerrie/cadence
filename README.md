@@ -58,8 +58,8 @@ Class status is always derived on the fly from task statuses — never stored.
 ### Design Principles
 
 - **The folder is the memory, not the agent.** Each execution gets a fresh Claude instance. Nothing carries over except what's written to the folder.
-- **Hard boundaries over instructions.** Write scope enforcement (`.claude/settings.json`) prevents agents from bypassing scripts. Scripts gate all YAML mutations.
-- **The hierarchy belongs to the user.** It's folders and markdown on a filesystem. Uninstalling the plugin doesn't delete their data. Any runtime that can parse YAML and run Python can execute it.
+- **Hard boundaries over instructions.** Write scope enforcement (`.claude/settings.json` on the Claude track, the in-process `tool_call` gate on the Pi track) prevents agents from bypassing scripts. Scripts gate all YAML mutations.
+- **The hierarchy belongs to the user.** It's folders and markdown on a filesystem. Uninstalling the plugin doesn't delete their data. Any runtime that can parse YAML and run Python can execute it — and Cadence ships glue for two (Cowork and Pi).
 - **Git-versioned.** Every change is committed automatically. Full undo history.
 
 ## Repository Layout
@@ -101,8 +101,9 @@ see `spec/tickets/ticket-pi-migration.md`.
 | Script | Purpose |
 |--------|---------|
 | `init-engagement.py` | Scaffold a new engagement root with git init |
-| `init-class.py` | Scaffold a new class directory (generates `.claude/settings.json`) |
-| `init-task.py` | Scaffold a new task directory (generates `.claude/settings.json`) |
+| `init-class.py` | Scaffold a new class directory (Claude track also gets `.claude/settings.json`) |
+| `init-task.py` | Scaffold a new task directory (Claude track also gets `.claude/settings.json`) |
+| `settings-gen.py` | Generate the Claude-track `.claude/settings.json` for a level (invoked by the init scripts when `CADENCE_TRACK=claude`) |
 | `init-period.py` | Scaffold a period directory (data/, workpapers/, review-notes/) |
 | `edit-class-yaml.py` | Gateway for `.class.yaml` mutations (enum-validated) |
 | `load-context.py` | Assemble context from the hierarchy (pure read, no side effects) |
@@ -117,14 +118,66 @@ see `spec/tickets/ticket-pi-migration.md`.
 
 All scripts follow the exit-code contract (see `spec/05-scripts.md`): exit 0 = success, exit 1 = validation error, exit 2 = system error. Non-zero exit guarantees no side effects.
 
+## Installation — two tracks, one repo
+
+Cadence runs on two agent harnesses over the same shared spine (`scripts/` +
+`skills/`). The engagement folder it produces is identical either way — *the
+folder is the memory, not the agent* — so a hierarchy is portable between them.
+
+### Claude / Cowork (the original track)
+
+Install the Cowork plugin. The plugin root is assembled from the shared sources
+by `claude/assemble.py`, which links the top-level `scripts/` + `skills/` under
+`claude/plugin/` (Cowork forbids `../` in manifest paths, so the install root
+must be self-contained):
+
+```bash
+python claude/assemble.py        # link scripts/ + skills/ under claude/plugin/
+python claude/assemble.py --copy # or copy, for packaging/distribution
+```
+
+Then point Cowork at `claude/plugin/`. Write-scope enforcement comes from the
+`.claude/settings.json` files the scaffolders generate (`CADENCE_TRACK` unset or
+`claude`).
+
+### Pi (the second track)
+
+Cadence is a [Pi](https://github.com/earendil-works/pi) package — declared by the
+`pi` key in the root `package.json` (`extensions: ["./pi/extension"]`,
+`skills: ["./skills"]`). Install it straight from the repo:
+
+```bash
+pi install git:github.com/tomfoolerrie/cadence@<ref>
+```
+
+Pi clones the whole repo and reads the root manifest. There is **no** assembly
+step — Pi references the shared `skills/` in place. Write-scope enforcement comes
+from the in-process `tool_call` gate (`pi/extension/`), which reproduces the
+Claude track's two deny rules **and** adds a Bash gate (head whitelist +
+banned-pattern scan) that `settings.json` cannot express. The extension sets
+`CADENCE_TRACK=pi`, so the scaffolders emit no `.claude/`.
+
 ## Running Tests
+
+**Python (the shared spine + both tracks' scaffolding):**
 
 ```bash
 source venv/bin/activate
-python -m pytest tests/
+python -m pytest tests/        # 310 tests: tests/unit/ (shared) + tests/claude/ + tests/pi/
 ```
 
-299 tests (unit + e2e). Markers: `@pytest.mark.mid` for component tests, `@pytest.mark.e2e` for workflow tests.
+Markers: `@pytest.mark.mid` for component tests, `@pytest.mark.e2e` for workflow
+tests. `tests/unit/` is harness-neutral; `tests/claude/` asserts the generated
+`.claude/settings.json`; `tests/pi/` asserts the `CADENCE_TRACK=pi` no-`.claude/`
+contract.
+
+**TypeScript (the Pi gate — no key, no container):**
+
+```bash
+npm install          # one-time: tsx + typescript + the pinned Pi SDK (devDeps)
+npm run test:gate    # the pure policy classifier + the factory wiring
+npm run typecheck    # tsc over pi/extension/*.ts
+```
 
 ## Current Status
 
@@ -133,4 +186,5 @@ python -m pytest tests/
 - **Post-dry-run-1 fixes** — All three critical items resolved: `init-engagement.py` (git init), `edit-class-yaml.py` (enum-validated YAML gateway), write scope enforcement (`.claude/settings.json` auto-generated by scaffolding scripts).
 - **v0.1.1** — Anchor system redesigned (one-ahead with `last_*` support, late-completion guard). Engagement venv support added. `/onboard` consolidated from 7-8 script calls to 3. Script exit patterns normalized. Cowork sandbox compatibility (`.absolute()` walk-up, system-pip fallback).
 - **Dry run 2** (2026-03-28) — Full lifecycle completed end-to-end in Cowork: `/onboard` → `/done` (approved 2026-02) → `check-periods.py` auto-reset → `/start` (2026-03) → `review_ready`. Four clean git commits. Workpapers balanced ($998.25 for 2026-02, $1,017.75 for 2026-03). Script gating held; tool-deferral worked. Remaining gaps are ergonomic (e.g. AGENTS.md prompting), not structural. See `notes/dry-run-2026-03-25.md` and `notes/open-items.md` Post-Dry-Run 2 section.
+- **Pi migration** (in progress, `spec/tickets/ticket-pi-migration.md`) — Two tracks over one shared spine. Phases 1–5 done and host-verified: the in-place cleanups, the two-track restructure, `settings-gen.py` + `CADENCE_TRACK`, the Pi `tool_call` gate + root `pi` manifest, and the parity tests (310 pytest + 22 TS gate tests green; the Pi extension + all 4 skills load through the real Pi 0.75.4 machinery). Phase 6 — a live dry-run-3 on a non-Anthropic model — is the remaining acceptance proof (needs Pi + a key; not yet run).
 - **Next** — See `notes/open-items.md` for the priority queue.

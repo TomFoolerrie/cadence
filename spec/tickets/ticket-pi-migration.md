@@ -1,20 +1,24 @@
 # Ticket: Pi migration — two tracks, one repo
 
-**Status:** IN PROGRESS — Phases 1–5 done (cleanups, restructure, settings-gen + CADENCE_TRACK, Pi gate + manifest, parity tests); Phase 6 (live dry run) needs Pi + a non-Anthropic key; Phase 7 (docs) pending.
+**Status:** IN PROGRESS — Phases 1–5 + 7 done and host-verified; **only Phase 6 (the live dry-run-3 on a non-Anthropic model) remains** — it needs Pi + a key + a billed run, so it stays out of `Complete/` until that one run passes (same posture as the sibling pi-harness ticket).
 **Source of truth:** [`spec/pi-migration.md`](../pi-migration.md) (detailed spec — the *how*) and [`notes/v2+/pi-migration-plan.md`](../../notes/v2+/pi-migration-plan.md) (the planning doc — the *why*).
 
-> **Rollup (2026-06-02).** The detailed spec is written and **every external
-> dependency is confirmed against primary sources** — the Pi runtime API
-> (`@earendil-works/pi-coding-agent` 0.75.4, via the sibling `pi-harness`), Pi
-> distribution (a `pi` key in the repo-root `package.json`, verified by inspecting
-> the package), Cowork packaging (Claude Code plugins forbid `../` manifest paths
-> → assemble-on-package), and the current script behaviour. Nothing is blocked on
-> an unverified assumption. **Nothing is built yet:** the repo still has the
-> single Cowork `plugin/` layout. This ticket sequences the build in 7 phases that
-> each end with **all 299 Claude-track tests green** — the working lane never
-> breaks while the new one is built. Phase 1 (in-place cleanups) is the safe first
-> commit. The Pi-specific phases (4–6) need Node/Pi + a non-Anthropic key for the
-> live dry run; everything through Phase 3 is host-verifiable with pytest alone.
+> **Rollup (updated 2026-06-03).** **Phases 1–5 + 7 are BUILT and host-verified;
+> only Phase 6 (the billed live dry run) remains.** The two-track layout is real:
+> shared `scripts/`+`skills/` under `claude/` (assembled Cowork plugin) and `pi/`
+> (the `tool_call` gate), with the Pi package declared by the root `package.json`
+> `pi` key. Write-scope enforcement is two mechanisms over one boundary —
+> `settings-gen.py`+`CADENCE_TRACK` on Claude, the in-process gate on Pi (which
+> also gates Bash). Verified WITHOUT a billed run: **310 pytest green** (unit +
+> `tests/claude/` + `tests/pi/`) and **22 TS gate tests + a clean typecheck**, and
+> the extension + all 4 skills load through the **real Pi 0.75.4 machinery**
+> (`loadExtensions` errors:[], `loadSkillsFromDir` no diagnostics). Every external
+> dependency was already confirmed against primary sources (Pi runtime API, the
+> root-`package.json` manifest, Cowork's no-`../` rule). Every phase ended with the
+> working Claude lane green. **What's left:** Phase 6 — a `/onboard`→`/done`→
+> `check-periods`→`/start` lifecycle on Pi with a NON-Anthropic model — needs Pi +
+> a key + one billed run, so this ticket stays in `Tickets/` (not `Complete/`)
+> until that passes, mirroring the sibling pi-harness ticket's posture.
 
 **Motivation:** Cadence runs only on Claude/Cowork today. Every entry point
 (skills, write-scope enforcement, context loading, MCP routing) is wired to
@@ -280,7 +284,14 @@ correct output — this is the proof the whole ticket exists for.
 
 ## Phase 7 — Documentation
 
-> **STATUS: NOT STARTED.**
+> **STATUS: DONE (2026-06-03).** README gained an "Installation — two tracks"
+> section (Cowork via `claude/assemble.py` vs `pi install git:…`), a two-tier
+> "Running Tests" block (pytest + the TS gate), a "Pi migration" status bullet,
+> and updated layout + design-principle + scripts-table rows. `spec/05-scripts.md`
+> + `spec/06-separation-of-concerns.md` now describe BOTH enforcement mechanisms
+> (Claude `settings.json` via `settings-gen.py` + the Pi `tool_call` gate) and the
+> `tools/` re-home. `.claude/CLAUDE.md` carries the two-track layout (Phase 2),
+> the TS test commands, the assemble reminder, and the commit-signing gotcha.
 
 - [ ] README: describe both lanes with per-lane install instructions
       (Cowork plugin vs `pi install git:github.com/tomfoolerrie/cadence@<ref>`).

@@ -30,13 +30,21 @@ For general failure behavior (exit codes, side-effect guarantees), see Section 6
 <path>/
 ├── .context-root       ← engagement: <name>, schema_version: 1
 ├── AGENTS.md            ← template with # <name>, ## Entity Details
-├── .claude/
-│   ├── tools/          ← empty directory
-│   └── settings.json   ← write scope: allow Read and Write(./*)
+├── tools/              ← global shared tools (track-neutral; empty at scaffold)
+├── .claude/            ← Claude track only (CADENCE_TRACK=claude); absent on Pi
+│   └── settings.json   ← write scope: allow Read and Write(./*); via settings-gen.py
 ├── .gitignore          ← ignores **/periods/*/data/, **/periods/*/workpapers/,
 │                         .context-cache/, .DS_Store
 └── requirements.txt    ← empty file
 ```
+
+> **Two tracks.** The `.claude/settings.json` shown here (and at the class/task
+> levels below) is the **Claude track's** write-scope mechanism, emitted by
+> `scripts/settings-gen.py` only when `CADENCE_TRACK=claude` (the default). On the
+> **Pi track** (`CADENCE_TRACK=pi`) no `.claude/` is written — the equivalent
+> boundary, plus a Bash gate, is the in-process `tool_call` gate in `pi/extension/`.
+> Global tools live in the track-neutral `tools/` (re-homed from `.claude/tools/`),
+> read by `load-context.py` on both tracks.
 
 `<name>` is derived from the path basename by converting hyphens and underscores to spaces, then title-casing. Overridden by `--name` if provided.
 
@@ -110,7 +118,7 @@ Prints each file with section headers. Order is always top-down (root first, tas
 ── tools ──
 task:   treasury/monthly-bank-fees/tools/
 class:  treasury/tools/
-global: .claude/tools/
+global: tools/
 ```
 
 The `── tools ──` section is only printed at `--level task`. It lists tool directories in resolution order (task > class > global). Directories that don't exist are omitted.
@@ -290,7 +298,7 @@ Subcommand-based interface:
 <name>/
 ├── .class.yaml         ← schema_version: 1, name: <Name>, description: "", manifest: []
 ├── AGENTS.md            ← template with ## What This Class Covers, ## Key Concepts
-├── .claude/
+├── .claude/            ← Claude track only; on Pi the tool_call gate enforces this
 │   └── settings.json   ← write scope: allow Write(./**), deny Write(../**) and Write(./.class.yaml)
 ├── tools/              ← empty directory
 └── requirements.txt    ← empty file
@@ -342,7 +350,7 @@ Subcommand-based interface:
 ├── reference.md        ← auto-generated quick-reference for plugin scripts and write restrictions
 ├── status.yaml         ← schema_version: 1, period: "", status: not_started,
 │                         issues: [], done_at: null
-├── .claude/
+├── .claude/            ← Claude track only; on Pi the tool_call gate enforces this
 │   └── settings.json   ← write scope: allow Write(./**), deny Write(../**) and Write(./status.yaml)
 ├── tools/              ← empty directory
 ├── periods/            ← empty directory
@@ -574,7 +582,7 @@ Runs two scripts in sequence from the current (class) directory:
 
 If `load-context.py` fails, `init-task.py` is not run (no partial state).
 
-**File writes:** Task directory structure (via `init-task.py`): `<task-name>/SKILL.md`, `learned.md`, `reference.md`, `status.yaml`, `tools/`, `periods/`, `requirements.txt`, `.claude/settings.json`.
+**File writes:** Task directory structure (via `init-task.py`): `<task-name>/SKILL.md`, `learned.md`, `reference.md`, `status.yaml`, `tools/`, `periods/`, `requirements.txt`, and — on the Claude track only (`CADENCE_TRACK=claude`) — `.claude/settings.json` (via `settings-gen.py`).
 
 **Stdout:** `load-context.py` output on success (the context payload for the agent). No output on failure.
 
