@@ -10,11 +10,32 @@ Preconditions:
 Exit codes: 0 = success, 1 = precondition failed, 2 = filesystem error
 """
 
-import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 import yaml
+
+
+def emit_claude_settings(target: Path, level: str) -> int:
+    """Generate `.claude/settings.json` via settings-gen.py — Claude track only.
+
+    The harness sets `CADENCE_TRACK`; unset defaults to `claude`. On the Pi
+    track this is a no-op (the tool_call gate enforces write scope instead).
+    Returns 0 on success or skip, 2 if generation fails.
+    """
+    if os.environ.get("CADENCE_TRACK", "claude") != "claude":
+        return 0
+    settings_gen = Path(__file__).resolve().parent / "settings-gen.py"
+    result = subprocess.run(
+        [sys.executable, str(settings_gen), str(target), level],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"settings-gen failed: {result.stderr.strip()}", file=sys.stderr)
+        return 2
+    return 0
 
 
 SKILL_MD_TEMPLATE = """\
@@ -150,24 +171,17 @@ def main() -> int:
         # periods/
         (task_dir / "periods").mkdir()
 
-        # .claude/settings.json (write scope enforcement)
-        (task_dir / ".claude").mkdir()
-        settings = {
-            "permissions": {
-                "allow": ["Read", "Write(./**)"],
-                "deny": ["Write(../**)", "Write(./status.yaml)"],
-            }
-        }
-        with open(task_dir / ".claude" / "settings.json", "w") as f:
-            json.dump(settings, f, indent=2)
-            f.write("\n")
-
         # requirements.txt
         (task_dir / "requirements.txt").write_text("")
 
     except OSError as e:
         print(f"Filesystem error: {e}", file=sys.stderr)
         return 2
+
+    # Write-scope enforcement (Claude track only; Pi uses the tool_call gate).
+    rc = emit_claude_settings(task_dir, "task")
+    if rc != 0:
+        return rc
 
     return 0
 

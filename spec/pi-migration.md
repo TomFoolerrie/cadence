@@ -60,7 +60,10 @@ These three facts de-risk the migration and drive the resolutions below.
 
 **Decision.** All three scaffolders — `init-engagement.py`, `init-class.py`,
 `init-task.py` — drop their inline `.claude/` generation (grounding fact 2). The
-Claude-track enforcement files are produced by a new `claude/settings-gen.py`
+Claude-track enforcement files are produced by a new `scripts/settings-gen.py`
+(in the **shared** `scripts/` dir — *not* `claude/` — so it ships inside the
+assembled Cowork plugin root alongside the init scripts that call it; `claude/`
+is a sibling of the plugin root and is not distributed)
 (per-level: root = allow-only, class = deny `.class.yaml`, task = deny
 `status.yaml`). The init scripts invoke it **only when `CADENCE_TRACK=claude`**;
 the Pi track emits no `.claude/` at any level and needs no per-dir glue because
@@ -86,7 +89,7 @@ directory (`.claude/tools/`, today created by `init-engagement.py` and read by
 - The Claude harness glue sets `CADENCE_TRACK=claude`. The Pi extension sets
   `CADENCE_TRACK=pi` in the environment of any bash tool call it permits.
 - On `CADENCE_TRACK=claude`, `init-engagement.py`/`init-class.py`/`init-task.py`
-  shell out to `claude/settings-gen.py <target-dir> <level>` (level ∈
+  shell out to `scripts/settings-gen.py <target-dir> <level>` (level ∈
   {`root`,`class`,`task`}) after the shared scaffold writes succeed. A non-zero
   `settings-gen.py` exit is a system error (exit 2) — the scaffold already wrote,
   so this is the documented "partial-but-recoverable" case; rerunning
@@ -290,8 +293,9 @@ links/copies top-level `scripts/` + `skills/` under `claude/plugin/` as
 `./scripts`/`./skills` (Cowork forbids `../` manifest paths). The Pi manifest
 needs no assembly — it references `./skills` from the root `package.json` (Q6).
 
-**Step 3 — Extract settings generation.** New `claude/settings-gen.py <dir>
-<level>` carrying the exact `permissions` blocks currently inlined in the three
+**Step 3 — Extract settings generation.** New `scripts/settings-gen.py <dir>
+<level>` (shared dir, so it ships inside the assembled plugin root — see Q3)
+carrying the exact `permissions` blocks currently inlined in the three
 scaffolders: `init-engagement.py` (root — allow-only, no deny), `init-class.py`
 (deny `Write(../**)`, `Write(./.class.yaml)`), and `init-task.py` (deny
 `Write(../**)`, `Write(./status.yaml)`). Make **all three** init scripts

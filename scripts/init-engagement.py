@@ -10,7 +10,7 @@ Exit codes: 0 = success, 1 = validation error, 2 = system error
 """
 
 import argparse
-import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -41,6 +41,28 @@ def derive_name(path_str: str) -> str:
     """
     basename = Path(path_str.rstrip("/")).name
     return basename.replace("-", " ").replace("_", " ").title()
+
+
+def emit_claude_settings(target: Path, level: str) -> int:
+    """Generate `.claude/settings.json` via settings-gen.py — Claude track only.
+
+    The harness sets `CADENCE_TRACK`; unset defaults to `claude` (backward
+    compatible). On the Pi track this is a no-op (the tool_call gate enforces
+    write scope instead). Returns 0 on success or skip, 2 if generation fails
+    (the scaffold has already written — the documented partial-but-recoverable
+    case; rerunning settings-gen.py is idempotent).
+    """
+    if os.environ.get("CADENCE_TRACK", "claude") != "claude":
+        return 0
+    settings_gen = Path(__file__).resolve().parent / "settings-gen.py"
+    result = subprocess.run(
+        [sys.executable, str(settings_gen), str(target), level],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"settings-gen failed: {result.stderr.strip()}", file=sys.stderr)
+        return 2
+    return 0
 
 
 def main() -> int:
@@ -95,18 +117,8 @@ def main() -> int:
             AGENT_MD_TEMPLATE.format(engagement=engagement_name)
         )
 
-        # .claude/tools/
-        (target / ".claude" / "tools").mkdir(parents=True)
-
-        # .claude/settings.json (write scope enforcement)
-        settings = {
-            "permissions": {
-                "allow": ["Read", "Write(./**)"],
-            }
-        }
-        with open(target / ".claude" / "settings.json", "w") as f:
-            json.dump(settings, f, indent=2)
-            f.write("\n")
+        # tools/ — track-neutral global shared tools (was .claude/tools/)
+        (target / "tools").mkdir()
 
         # .gitignore
         (target / ".gitignore").write_text(GITIGNORE_CONTENT)
@@ -117,6 +129,11 @@ def main() -> int:
     except OSError as exc:
         print(f"Filesystem error: {exc}", file=sys.stderr)
         return 2
+
+    # Write-scope enforcement (Claude track only; Pi uses the tool_call gate).
+    rc = emit_claude_settings(target, "root")
+    if rc != 0:
+        return rc
 
     # --- Git init and initial commit ---
 

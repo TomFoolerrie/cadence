@@ -186,7 +186,9 @@ def main() -> int:
     # Tools section
     task_tools = task_dir / "tools"
     class_tools = class_dir / "tools"
-    global_tools = root / ".claude" / "tools"
+    # Global tools live in a track-neutral root/tools/ (re-homed from
+    # .claude/tools/ so the convention survives on the Pi track).
+    global_tools = root / "tools"
 
     tool_lines: list[str] = []
 

@@ -1,11 +1,32 @@
 #!/usr/bin/env python3
 """Scaffold a new class directory under an engagement root."""
 
-import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 import yaml
+
+
+def emit_claude_settings(target: Path, level: str) -> int:
+    """Generate `.claude/settings.json` via settings-gen.py — Claude track only.
+
+    The harness sets `CADENCE_TRACK`; unset defaults to `claude`. On the Pi
+    track this is a no-op (the tool_call gate enforces write scope instead).
+    Returns 0 on success or skip, 2 if generation fails.
+    """
+    if os.environ.get("CADENCE_TRACK", "claude") != "claude":
+        return 0
+    settings_gen = Path(__file__).resolve().parent / "settings-gen.py"
+    result = subprocess.run(
+        [sys.executable, str(settings_gen), str(target), level],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"settings-gen failed: {result.stderr.strip()}", file=sys.stderr)
+        return 2
+    return 0
 
 
 def main() -> int:
@@ -68,24 +89,17 @@ def main() -> int:
         # tools/
         (target / "tools").mkdir()
 
-        # .claude/settings.json (write scope enforcement)
-        (target / ".claude").mkdir()
-        settings = {
-            "permissions": {
-                "allow": ["Read", "Write(./**)"],
-                "deny": ["Write(../**)", "Write(./.class.yaml)"],
-            }
-        }
-        with open(target / ".claude" / "settings.json", "w") as f:
-            json.dump(settings, f, indent=2)
-            f.write("\n")
-
         # requirements.txt
         (target / "requirements.txt").write_text("")
 
     except OSError as exc:
         print(str(exc), file=sys.stderr)
         return 2
+
+    # Write-scope enforcement (Claude track only; Pi uses the tool_call gate).
+    rc = emit_claude_settings(target, "class")
+    if rc != 0:
+        return rc
 
     return 0
 

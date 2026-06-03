@@ -8,8 +8,6 @@ Spec: init-task.py <name> (run from class directory)
 - Not idempotent
 """
 
-import json
-
 import pytest
 
 from conftest import make_class, make_context_root, read_yaml, run_script
@@ -106,32 +104,8 @@ class TestCreatesTaskDirectory:
         content = (class_dir / "monthly-bank-fees" / "requirements.txt").read_text()
         assert content.strip() == ""
 
-    def test_claude_settings_json_exists(self, class_dir):
-        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
-        assert (class_dir / "monthly-bank-fees" / ".claude" / "settings.json").is_file()
-
-    def test_claude_settings_json_content(self, class_dir):
-        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
-
-        with open(class_dir / "monthly-bank-fees" / ".claude" / "settings.json") as f:
-            settings = json.load(f)
-
-        assert settings == {
-            "permissions": {
-                "allow": ["Read", "Write(./**)"],
-                "deny": ["Write(../**)", "Write(./status.yaml)"],
-            }
-        }
-
-    def test_claude_settings_json_deny_rules(self, class_dir):
-        run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
-
-        with open(class_dir / "monthly-bank-fees" / ".claude" / "settings.json") as f:
-            settings = json.load(f)
-
-        deny = settings["permissions"]["deny"]
-        assert "Write(../**)" in deny
-        assert "Write(./status.yaml)" in deny
+    # Note: .claude/settings.json content is the Claude track's enforcement
+    # mechanism — those assertions live in tests/claude/ (harness-specific).
 
 
 # ---------------------------------------------------------------------------

@@ -2,14 +2,13 @@
 Contract tests for init-engagement.py
 
 Spec: init-engagement.py <path> [--name <engagement-name>]
-- Creates: .context-root, AGENTS.md, .claude/tools/, .gitignore, requirements.txt
+- Creates: .context-root, AGENTS.md, tools/, .gitignore, requirements.txt
 - Runs git init and creates initial commit
 - If --name not provided, derives name from directory basename
 - Exit codes: 0 = success, 1 = validation error, 2 = system error
 - Not idempotent
 """
 
-import json
 import subprocess
 
 import pytest
@@ -36,7 +35,7 @@ class TestCreatesEngagementDirectory:
         assert target.is_dir()
         assert (target / ".context-root").is_file()
         assert (target / "AGENTS.md").is_file()
-        assert (target / ".claude" / "tools").is_dir()
+        assert (target / "tools").is_dir()
         assert (target / ".gitignore").is_file()
         assert (target / "requirements.txt").is_file()
 
@@ -89,30 +88,15 @@ class TestCreatesEngagementDirectory:
         content = (target / "requirements.txt").read_text()
         assert content.strip() == ""
 
-    def test_claude_tools_directory_exists(self, tmp_path):
+    def test_global_tools_directory_exists(self, tmp_path):
         target = tmp_path / "acme-corp"
         run_script("init-engagement.py", [str(target)])
 
-        assert (target / ".claude" / "tools").is_dir()
+        # Global shared tools live in a track-neutral root/tools/.
+        assert (target / "tools").is_dir()
 
-    def test_claude_settings_json_exists(self, tmp_path):
-        target = tmp_path / "acme-corp"
-        run_script("init-engagement.py", [str(target)])
-
-        assert (target / ".claude" / "settings.json").is_file()
-
-    def test_claude_settings_json_content(self, tmp_path):
-        target = tmp_path / "acme-corp"
-        run_script("init-engagement.py", [str(target)])
-
-        with open(target / ".claude" / "settings.json") as f:
-            settings = json.load(f)
-
-        assert settings == {
-            "permissions": {
-                "allow": ["Read", "Write(./**)"],
-            }
-        }
+    # Note: .claude/settings.json content is the Claude track's enforcement
+    # mechanism — those assertions live in tests/claude/ (harness-specific).
 
 
 # ---------------------------------------------------------------------------

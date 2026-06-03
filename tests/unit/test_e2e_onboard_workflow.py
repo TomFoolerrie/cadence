@@ -5,7 +5,6 @@ Tests cross-script state — not re-testing individual scripts, but verifying
 that the full onboard chain produces a valid, usable hierarchy.
 """
 
-import json
 import subprocess
 
 import pytest
@@ -209,38 +208,9 @@ class TestOnboardWorkflow:
         assert class_data["description"] == "Cash management and banking"
         assert isinstance(class_data["manifest"], list)
 
-    def test_write_scope_enforcement_artifacts(self, tmp_path):
-        """
-        Verify that init-engagement, init-class, and init-task each produce
-        correct .claude/settings.json write scope enforcement files.
-        """
-        root = init_engagement(tmp_path)
-
-        # Root level: allow only, no deny
-        with open(root / ".claude" / "settings.json") as f:
-            root_settings = json.loads(f.read())
-        assert root_settings["permissions"]["allow"] == ["Read", "Write(./**)"]
-        assert "deny" not in root_settings["permissions"]
-
-        # Class level
-        result = run_script("init-class.py", ["treasury"], cwd=root)
-        assert result.returncode == 0
-        class_dir = root / "treasury"
-
-        with open(class_dir / ".claude" / "settings.json") as f:
-            class_settings = json.loads(f.read())
-        assert "Write(../**)" in class_settings["permissions"]["deny"]
-        assert "Write(./.class.yaml)" in class_settings["permissions"]["deny"]
-
-        # Task level
-        result = run_script("init-task.py", ["monthly-bank-fees"], cwd=class_dir)
-        assert result.returncode == 0
-        task_dir = class_dir / "monthly-bank-fees"
-
-        with open(task_dir / ".claude" / "settings.json") as f:
-            task_settings = json.loads(f.read())
-        assert "Write(../**)" in task_settings["permissions"]["deny"]
-        assert "Write(./status.yaml)" in task_settings["permissions"]["deny"]
+    # Note: write-scope enforcement (.claude/settings.json) is the Claude
+    # track's mechanism — its multi-level assertions live in
+    # tests/claude/test_settings_enforcement.py (harness-specific).
 
     def test_second_task_onboard_adds_to_existing_manifest(self, tmp_path):
         """

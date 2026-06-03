@@ -136,18 +136,24 @@ def run_script(
     args: Optional[List[str]] = None,
     cwd: Optional[Path] = None,
     timeout: int = 10,
+    env: Optional[Dict[str, str]] = None,
 ) -> subprocess.CompletedProcess:
     """
     Run scripts/<script_name> via the current Python interpreter.
+
+    Pass ``env`` to set/override environment variables for the child (e.g.
+    ``{"CADENCE_TRACK": "pi"}``); it is layered over the inherited environment.
 
     Returns subprocess.CompletedProcess with stdout, stderr, returncode.
     """
     script_path = SCRIPTS_DIR / script_name
     cmd = [sys.executable, str(script_path)] + (args or [])
-    env = {"PYTHONDONTWRITEBYTECACHE": "1"}
+    overrides = {"PYTHONDONTWRITEBYTECACHE": "1"}
+    if env:
+        overrides.update(env)
 
     full_env = os.environ.copy()
-    full_env.update(env)
+    full_env.update(overrides)
 
     return subprocess.run(
         cmd,
@@ -186,12 +192,13 @@ def make_context_root(
     # requirements.txt (empty)
     (path / "requirements.txt").write_text("")
 
-    # .claude/tools/
-    (path / ".claude" / "tools").mkdir(parents=True, exist_ok=True)
+    # tools/ — track-neutral global shared tools (re-homed from .claude/tools/)
+    (path / "tools").mkdir(parents=True, exist_ok=True)
 
-    # .claude/settings.json
+    # .claude/settings.json — default (claude) track enforcement
     import json
     settings = {"permissions": {"allow": ["Read", "Write(./**)"]}}
+    (path / ".claude").mkdir(parents=True, exist_ok=True)
     with open(path / ".claude" / "settings.json", "w") as f:
         json.dump(settings, f, indent=2)
         f.write("\n")
@@ -384,7 +391,7 @@ def run_check_periods(cwd, as_of=None):
 
 @pytest.fixture
 def engagement_root(tmp_path):
-    """Minimal engagement root with .context-root, AGENTS.md, requirements.txt, .claude/tools/."""
+    """Minimal engagement root with .context-root, AGENTS.md, requirements.txt, tools/."""
     return make_context_root(tmp_path)
 
 

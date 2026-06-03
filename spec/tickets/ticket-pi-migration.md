@@ -1,6 +1,6 @@
 # Ticket: Pi migration — two tracks, one repo
 
-**Status:** IN PROGRESS — Phases 1–2 done (cleanups + two-track restructure); Phases 3–7 not started.
+**Status:** IN PROGRESS — Phases 1–3 done (cleanups, restructure, settings-gen + CADENCE_TRACK); Phases 4–7 not started.
 **Source of truth:** [`spec/pi-migration.md`](../pi-migration.md) (detailed spec — the *how*) and [`notes/v2+/pi-migration-plan.md`](../../notes/v2+/pi-migration-plan.md) (the planning doc — the *why*).
 
 > **Rollup (2026-06-02).** The detailed spec is written and **every external
@@ -126,8 +126,9 @@ cadence/
 ├── scripts/       SHARED — the 14 Python scripts (harness-agnostic)
 ├── spec/          SHARED
 ├── tests/         SHARED, split: unit/ (neutral) + claude/ + pi/
+├── scripts/       SHARED — incl. settings-gen.py (claude-track-only, but shared so it ships in the plugin root)
 ├── pi/            Pi glue — extension/ (the tool_call gate)
-├── claude/        Claude glue — plugin/ (assembled) + settings-gen.py
+├── claude/        Claude glue — plugin/ (assembled) + assemble.py
 ├── package.json   ROOT — carries the "pi" manifest key (Q6)
 └── engagement-template/, notes/, docs/, pyproject.toml
 ```
@@ -148,12 +149,26 @@ engagement folder (or `engagement-template/`) still runs unchanged.
 
 ## Phase 3 — Settings generation + `CADENCE_TRACK` (Q3) + global-tools re-home
 
-> **STATUS: NOT STARTED.** Host-verifiable with pytest.
+> **STATUS: DONE (2026-06-03).** `scripts/settings-gen.py <dir> <level>` carries
+> the three permission blocks; all three init scripts are `CADENCE_TRACK`-aware
+> (unset → `claude`; tail-call `settings-gen.py` only on the claude track, emit
+> no `.claude/` on `pi`). Global tools re-homed from `.claude/tools/` to a
+> track-neutral `root/tools/`, read by `load-context.py` on both tracks. The
+> settings.json assertions moved out of `tests/unit/` into a new
+> `tests/claude/test_settings_enforcement.py` (per-level content + settings-gen
+> idempotency/validation); `tests/pi/test_no_claude_artifacts.py` asserts the
+> `CADENCE_TRACK=pi` no-`.claude/` contract at all three levels + global-tools
+> survival. `run_script` gained an `env=` param. **Location note:** the spec
+> said `claude/settings-gen.py`, but it must live in the **shared `scripts/`**
+> dir to ship inside the assembled plugin root (`claude/` is not distributed) —
+> spec §2/§4 updated to match. Suite green at **310 passed**.
 
-- [ ] **`claude/settings-gen.py <dir> <level>`** carrying the exact `permissions`
-      blocks currently inlined in the three scaffolders: `init-engagement.py` (root —
-      allow-only, no deny), `init-class.py` (deny `Write(../**)`, `Write(./.class.yaml)`),
-      `init-task.py` (deny `Write(../**)`, `Write(./status.yaml)`). Idempotent.
+- [ ] **`scripts/settings-gen.py <dir> <level>`** (shared dir — ships inside the
+      assembled plugin root; `claude/` is not distributed) carrying the exact
+      `permissions` blocks currently inlined in the three scaffolders:
+      `init-engagement.py` (root — allow-only, no deny), `init-class.py` (deny
+      `Write(../**)`, `Write(./.class.yaml)`), `init-task.py` (deny `Write(../**)`,
+      `Write(./status.yaml)`). Idempotent.
 - [ ] **Make all three init scripts `CADENCE_TRACK`-aware:** drop the inline
       `.claude/` generation; tail-call `settings-gen.py` **only when
       `CADENCE_TRACK=claude`** (unset defaults to `claude` — backward compatible).

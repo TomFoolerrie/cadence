@@ -159,7 +159,7 @@ class TestToolPaths:
         (class_path / "tools" / "parse.py").write_text("# class tool")
 
         root_path = class_path.parent
-        (root_path / ".claude" / "tools" / "format.py").write_text("# global tool")
+        (root_path / "tools" / "format.py").write_text("# global tool")
 
         result = run_load_context(task_dir, "task")
         assert result.returncode == 0
