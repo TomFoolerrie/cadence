@@ -8,6 +8,7 @@ Provides:
 - Pre-built fixtures for common test scenarios
 """
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -25,6 +26,23 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = PROJECT_ROOT / "plugin" / "scripts"
+
+
+def _load_init_task_module():
+    """Import init-task.py (hyphenated filename) so the test fixture can reuse
+    the SINGLE definition of the agent-facing plugin-root token, keeping
+    make_task() in lockstep with init-task.py (Ticket 01)."""
+    spec = importlib.util.spec_from_file_location(
+        "_cadence_init_task", SCRIPTS_DIR / "init-task.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# Single source of truth for the plugin-root token emitted into agent-facing
+# text — imported from init-task.py so the fixture cannot drift from production.
+PLUGIN_ROOT_TOKEN = _load_init_task_module().PLUGIN_ROOT_TOKEN
 
 DEFAULT_ENGAGEMENT = "Test Corp"
 DEFAULT_SCHEMA_VERSION = 1
@@ -288,13 +306,13 @@ def make_task(
     reference_content = (
         f"# reference — {name}\n\n"
         "## Write Restrictions\n"
-        "- `status.yaml` — Do not edit directly. Use: `python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py <status>`\n"
-        "- Do not create directories with mkdir. Use: `python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>`\n\n"
+        f"- `status.yaml` — Do not edit directly. Use: `python {PLUGIN_ROOT_TOKEN}/scripts/set-status.py <status>`\n"
+        f"- Do not create directories with mkdir. Use: `python {PLUGIN_ROOT_TOKEN}/scripts/init-period.py <period>`\n\n"
         "## Plugin Scripts\n"
         "| Script | Purpose | Usage |\n"
         "|--------|---------|-------|\n"
-        "| `set-status.py` | Change task status | `python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py <status>` |\n"
-        "| `init-period.py` | Scaffold a new period directory | `python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>` |\n"
+        f"| `set-status.py` | Change task status | `python {PLUGIN_ROOT_TOKEN}/scripts/set-status.py <status>` |\n"
+        f"| `init-period.py` | Scaffold a new period directory | `python {PLUGIN_ROOT_TOKEN}/scripts/init-period.py <period>` |\n"
     )
     (task_dir / "reference.md").write_text(reference_content)
 

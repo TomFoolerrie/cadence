@@ -17,6 +17,20 @@ from pathlib import Path
 import yaml
 
 
+# ---------------------------------------------------------------------------
+# Plugin-root token (runtime-portability seam — Ticket 01)
+# ---------------------------------------------------------------------------
+# The single substitutable token emitted into agent-facing text (reference.md,
+# the SKILL.md files) that tells the agent where the plugin scripts live.
+# Under Claude Code / Cowork the CC shell expands ${CLAUDE_PLUGIN_ROOT}; under
+# Pi the method-pin (Ticket 03) orients the agent to use $CADENCE_PLUGIN_ROOT.
+# This is the ONLY definition of the emitted token — tests/conftest.py imports
+# it so the test fixture and the real template can never diverge. NOTE: the
+# scripts themselves do NOT read this var at runtime — they resolve sibling
+# scripts via Path(__file__); this token is agent-facing prose only.
+PLUGIN_ROOT_TOKEN = "${CLAUDE_PLUGIN_ROOT}"
+
+
 SKILL_MD_TEMPLATE = """\
 ---
 name: {name}
@@ -56,14 +70,14 @@ REFERENCE_MD_TEMPLATE = """\
 # reference — {name}
 
 ## Write Restrictions
-- `status.yaml` — Do not edit directly. Use: `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/set-status.py <status>`
-- Do not create directories with mkdir. Use: `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/init-period.py <period>`
+- `status.yaml` — Do not edit directly. Use: `python {root}/scripts/set-status.py <status>`
+- Do not create directories with mkdir. Use: `python {root}/scripts/init-period.py <period>`
 
 ## Plugin Scripts
 | Script | Purpose | Usage |
 |--------|---------|-------|
-| `set-status.py` | Change task status | `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/set-status.py <status>` |
-| `init-period.py` | Scaffold a new period directory | `python ${{CLAUDE_PLUGIN_ROOT}}/scripts/init-period.py <period>` |
+| `set-status.py` | Change task status | `python {root}/scripts/set-status.py <status>` |
+| `init-period.py` | Scaffold a new period directory | `python {root}/scripts/init-period.py <period>` |
 """
 
 LEARNED_MD_TEMPLATE = """\
@@ -132,7 +146,9 @@ def main() -> int:
         (task_dir / "learned.md").write_text(LEARNED_MD_TEMPLATE)
 
         # reference.md
-        (task_dir / "reference.md").write_text(REFERENCE_MD_TEMPLATE.format(name=name))
+        (task_dir / "reference.md").write_text(
+            REFERENCE_MD_TEMPLATE.format(name=name, root=PLUGIN_ROOT_TOKEN)
+        )
 
         # status.yaml
         status_data = {
