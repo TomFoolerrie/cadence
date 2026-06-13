@@ -27,21 +27,30 @@ the Claude-Code→pi-harness mapping, and the milestone plan. Every other ticket
 | 03 | `/start` procedure → Pi method-pin (autonomous happy path) | cadence | 01, 02 |
 | 04 | Write-scope → gate enforce policy (**the load-bearing ticket**) | pi-harness | 02 |
 | 05 | Stage-B verifier for a Cadence run (`verify-cadence.py`) | pi-harness + cadence | 02, 03 |
-| 06 | End-to-end fixture + live-run acceptance | cadence + pi-harness | 03, 04, 05 |
+| 06 | End-to-end fixture + live-run acceptance (**milestone-1 gate**) | cadence + pi-harness | 03, 04, 05 |
+| 07 | Human-in-the-loop `/start`→review→`/done` over chat/serve (**milestone 2**) | cadence + pi-harness | 03, 04, 05, 06 |
+
+## Milestones
+
+- **Milestone 1 — autonomous `/start`** (tickets 00–06): one headless, governed period execution via
+  pi-harness `run-once`. No human in the loop.
+- **Milestone 2 — human-in-the-loop** (ticket 07): `/start` → human review → `/done` as **one
+  persistent chat/serve session** (one `run_id`, one accumulating audit). This is where inline `/done`
+  lives — it inherently needs the review step, so it cannot run under milestone 1's `run-once`.
 
 ## Dependency graph
 
 ```
 00 ─┬─► 01 ─┬─► 03 ─┐
-    │       │       ├─► 06  (milestone-1 gate: one live governed run)
+    │       │       ├─► 06  (milestone-1 gate: one live governed run) ─► 07  (milestone 2)
     └─► 02 ─┼─► 04 ─┤
             └─► 05 ─┘
 ```
 
-## Out of scope for milestone 1 (future tickets, not yet work-ordered)
+## Out of scope for milestones 1–2 (future, not yet work-ordered)
 
-- **Interactive `/onboard` + `/done`** inside the sandbox (needs human-in-the-loop over
-  pi-harness `chat`/`serve`).
+- **Interactive `/onboard`** (the knowledge-transfer interview) — same chat/serve substrate as 07, but
+  its own ticket; it's the richest interactive flow and deserves dedicated scoping.
 - **The multi-task orchestrator** (reading `.class.yaml` phases, launching a governed sub-run per
   task). pi-harness is single-session today; this is its own epic.
 - **Workspace/commit-aware `approve`/promote** — pi-harness `approve` promotes a single output doc;
