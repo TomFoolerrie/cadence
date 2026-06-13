@@ -17,6 +17,24 @@ the Claude-Code→pi-harness mapping, and the milestone plan. Every other ticket
   run procedure → produce draft → `review_ready`) runs governed in the container. Interactive
   `/onboard`, `/done`, and the multi-task orchestrator are explicitly deferred.
 
+> **BUILD STATUS (2026-06-13).** Milestone 1 (tickets 01–05) is **BUILT + host-verified**, committed,
+> and pushed to `claude/quirky-ptolemy-htwb4n` in both repos. Each was implemented test-first by a
+> sub-agent and reviewed against the code:
+> - **01** runtime-portability — cadence `9b6e4da` (307 pass; 1 pre-existing date-sensitive failure, unrelated)
+> - **02a** generic seam — pi-harness `d60b56b`
+> - **02** cadence-start preset (+ git/pyyaml/identity in base) — pi-harness `ca42ae2`
+> - **04** gate task-subtree + protected-file denial (load-bearing) — pi-harness `b4cfe0a`
+> - **03** `/start` method-pin (+ legal `not_started→in_progress→blocked` routing) — pi-harness `006e742`, cadence `f69726d`
+> - **fix** review caught the gate's protected-file rule was DEAD in a real run (the row didn't forward
+>   `GATE_PROTECTED_GLOBS`); fixed + proven end-to-end — pi-harness `b21452c`
+> - **05** Stage-B verifier `verify-cadence.py` (+ `verify:cadence`) — pi-harness `4c38958`
+>
+> pi-harness: 225 TS unit tests + 34 python verifier tests green, typecheck clean. **06** (one live
+> governed run) and **07** (milestone 2) are NOT built — 06's acceptance is a billed live run blocked in
+> this environment (no Docker-registry egress + no model key), and 07 depends on 06. They remain open
+> work orders with their host-verifiable parts done; the live run is the single remaining gate, exactly
+> as pi-harness's own base-build ticket handles the same constraint.
+
 > **Revised 2026-06-13 after a per-ticket review pass.** Review confirmed the core architecture but
 > surfaced that **Cadence is the first project that breaks pi-harness's "a project is a config row, not
 > a fork"** — it needs a generic entrypoint extension (**new Ticket 02a**) and **net-new gate policy**
