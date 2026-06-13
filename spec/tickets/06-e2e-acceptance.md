@@ -1,69 +1,88 @@
 # Ticket 06: End-to-end fixture + live-run acceptance (milestone-1 gate)
 
-**Status:** TODO
-**Repo:** cadence (the fixture engagement) + pi-harness (the live run)
-**Depends on:** 03, 04, 05 (and transitively 00–02)
-**Source of truth:** all of `00`–`05`; pi-harness `CLAUDE.md` (the "one live run" discipline, the
-headless serve/run notes), `tests/conftest.py` (cadence fixture conventions).
+**Status:** TODO (revised 2026-06-13 after review)
+**Repo:** cadence (fixture) + pi-harness (live run)
+**Depends on:** 02, 02a, 03, 04, 05 (transitively 00–01)
+**Source of truth:** all of `00`–`05`; cadence `tests/conftest.py`, `plugin/scripts/init-engagement.py`,
+`init-task.py`, `spec/04-scaffolding.md`; pi-harness `harness/CLAUDE.md` (the "one live run" discipline +
+environment-gating caveats), `src/fixtures/` (generator pattern).
 
 ## Goal
 
-Close the milestone: **one live, governed run** of autonomous `/start` over a committed fixture
-engagement, inside the pi-harness container, where the Stage-B verifier passes and the audit proves the
-gate contained the run. This is the epic's acceptance gate (Ticket 00 §Acceptance). Until it exists,
-the integration stays open — the same discipline pi-harness applies to its own base-build ticket.
+Close milestone 1: **one live, governed run** of autonomous `/start` over a committed fixture engagement
+where the verifier passes and the audit proves the gate contained the run — plus a **deterministic
+bad-seed** run proving the gate actually blocks.
 
-## Design — the fixture engagement
+## The fixture engagement (review-corrected)
 
-A **minimal, deterministic** engagement committed under e.g. `tests/fixtures/engagement-fixture/` (or a
-generator that builds it, mirroring `src/fixtures/` in pi-harness — prefer a generator so the binary/
-state isn't hand-maintained). It must be:
+Minimal, deterministic, **offline**, committed under e.g. `tests/fixtures/engagement-fixture/` (prefer a
+**generator**, like pi-harness `src/fixtures/`). It must include **everything the init scripts produce**
+(review found the inventory was incomplete):
 
-- A real engagement root: `.context-root`, root `AGENT.md`, one class (e.g. `treasury/`) with
-  `.class.yaml` + `AGENT.md`, one task (e.g. `monthly-bank-fees/`) with `SKILL.md`, `learned.md`,
-  `status.yaml`, and a `tools/` script.
-- **Self-contained and offline.** The task's procedure must run with **no network and no third-party
-  deps** (the milestone-1 risk from `00`): pre-place deterministic source data in
-  `periods/<period>/data/`, and make the tool pure-stdlib Python so `install-deps.py` has nothing to
-  fetch. (A trivially-deterministic task — e.g. sum a committed CSV into a balanced workpaper — is
-  ideal; it doesn't need to be the real bank-fees logic.)
-- Seeded so `/start` takes the **happy path**: `status: not_started` (or `review_ready` to exercise the
-  rejected-draft re-run), `period` already set, data present. Git-initialized with a clean base commit.
-- A **second, "bad" seed** (or a post-run tamper) to prove the verifier and gate *fail* correctly:
-  e.g. a task whose procedure tries to write outside its dir (gate must deny + verifier must catch).
+- root: `.context-root`, `AGENT.md`, **`.claude/settings.json`**, **`.claude/tools/`**,
+  **`requirements.txt` (empty)**, **`.gitignore`**, git-initialized with a clean base commit.
+- class (`treasury/`): `.class.yaml`, `AGENT.md`, `.claude/settings.json`, `requirements.txt` (empty).
+- task (`monthly-bank-fees/`): `SKILL.md`, `learned.md`, `status.yaml`, **`reference.md`**,
+  **`.claude/settings.json`** (the real deny rules), `requirements.txt` (empty), `tools/<tool>.py`,
+  `periods/<period>/data/` (seeded).
+
+**Offline invariant (explicit):** *every* `requirements.txt` is empty so `install-deps.py` no-ops (it
+only shells `pip` when requirements is non-empty — review-confirmed). A stray dep would hit PyPI and
+hang/fail. The task tool is **pure stdlib** (e.g. sum a committed CSV into a balanced workpaper — it
+need not be the real bank-fees logic).
+
+**`.gitignore` collision (review BLOCKER):** `init-engagement.py` writes ignore rules for
+`**/periods/*/data/` and `**/periods/*/workpapers/`. So seeded data won't be tracked and the produced
+workpaper won't appear in the commit. **Resolve:** the fixture overrides those ignore rules (or seeds
+data with `git add -f`), and acceptance treats the **workpaper as a working-tree artifact**, not a
+committed file. Decide and document in the fixture.
+
+Seed for the **happy path**: `status: not_started` (or `review_ready` to exercise the rejected-draft
+re-run), `period` set (or left empty for a non-adhoc format to exercise period-computation), data present.
+
+**Bad seed (deterministic — review correction):** an LLM may refuse a "write outside your dir"
+*instruction*, so the negative case must be a **`tools/` script the SKILL.md tells the agent to run that
+unconditionally writes outside `/work` entirely** (e.g. `/tmp/escape.txt` or `/etc/...`) — **not** one
+level up but still inside `/work` (that currently classifies as record/allow until Ticket 04, and even
+after, the reliable deny is an escape from `/work`). This makes the deny deterministic and tied to the
+gate, not model judgment.
 
 ## Work items
 
-- [ ] Build the fixture engagement (or its generator) + commit it. Document how to regenerate.
-- [ ] **Pre-flight on the host** (no billed run), per pi-harness discipline:
-      - pi-harness typecheck clean (CI list) and `npm test` green (incl. Tickets 02/04/05 additions);
-      - cadence `python -m pytest tests/` green (incl. Ticket 01 additions);
-      - the generated `docker` argv confirmed via a stub for `--project cadence-start` (mounts, env,
+- [ ] Build the fixture engagement (or generator) + commit; document regeneration and the `.gitignore`
+      override decision.
+- [ ] **Host pre-flight** (no billed run):
+      - pi-harness typecheck (CI list) + `npm test` green (incl. 02/02a/04/05 additions);
+      - cadence `python -m pytest tests/` green (incl. 01 additions);
+      - **offline dry-run `start-setup.py` over the fixture on the host** (catches a non-empty-requirements
+        regression before burning a billed run);
+      - `docker`-argv stub for `--project cadence-start` (mounts, env, `cwd=/work/<task>`,
         `GATE_MODE=enforce`, `AUDIT_ROOT=/runs`).
-- [ ] **The live run** (needs Docker + a model key + the network policy that allows the image pull):
-      `./run --project cadence-start --work <fixture-engagement> --cadence-task treasury/monthly-bank-fees`
-      then `./run --project cadence-start --task verify --work <same>`.
-- [ ] Capture the evidence: the git commit on the host, `status.yaml` = `review_ready`, the workpaper,
-      `/runs/audit/<run_id>/{audit.jsonl,manifest.json}`, and the verifier exit `0`.
-- [ ] Run the **bad seed** and confirm: the gate **denies** the out-of-scope write (audit shows a
-      `deny` entry, the enforce block actually fired) and the verifier exits non-zero.
-- [ ] Write up the result as a dry-run note under `notes/dry-runs/` (matching Cadence's existing
-      dry-run-findings convention) and flip `00`/`README.md` status to "milestone 1 done".
+- [ ] **Live run** (needs Docker + key + registry egress):
+      `./run --project cadence-start --cadence-root <cadence> --cadence-task treasury/monthly-bank-fees --work <fixture>`
+      then `./run --project cadence-start --task verify --work <fixture>`.
+- [ ] **Capture evidence:** the git commit on the host (assert **exactly one**, message
+      `[start] monthly-bank-fees <period>: …`); `status.yaml` = `review_ready` with `issues: []`; the
+      workpaper (working-tree); `/runs/audit/<run_id>/{audit.jsonl,manifest.json}`; **absence of any
+      pip/network tool call in the audit** (positive offline proof); verifier exit `0`.
+- [ ] **Bad-seed run:** confirm the gate **denies** the escape (a `deny` entry in `audit.jsonl`, the
+      enforce block fired), the engagement is **left uncommitted/unmodified** for the escape, and the
+      verifier exits non-zero.
+- [ ] Write up both as a dry-run note under `notes/dry-runs/`; flip `00`/`README.md` to "milestone 1 done".
 
 ## Acceptance (the milestone)
 
-- A green live run: autonomous `/start` over the fixture → `review_ready`, one commit, workpaper
-  present, verifier exit `0`, audit + manifest written.
-- A red live run on the bad seed: gate enforce **blocked** the over-reach (recorded in the audit),
-  verifier exit non-zero — proving the boundary is real, not decorative.
+- Green live run: `review_ready`, exactly one correctly-messaged commit, workpaper present, no
+  pip/network in the audit, verifier `0`, audit+manifest written.
+- Red live run: gate enforce **blocked** the out-of-`/work` escape (in the audit), no partial state
+  committed, verifier non-zero.
 - Both written up in `notes/dry-runs/`.
 
 ## Notes / risks
 
-- **Environment gating.** Like pi-harness's open base-build ticket, the live run may be blocked in a
-  given sandbox by (a) no Docker-registry egress for the image pull and (b) no API key. If so, complete
-  every host-verifiable item, record the exact 2-command live checklist here, and keep the ticket open
-  pending an environment with both — do not claim the milestone on host checks alone.
-- Never pipe a live run through `2>&1` (pi-harness PowerShell gotcha); run it once (it's billed).
-- For a headless `chat`/`serve` variant later, see pi-harness's "drive serve headless" notes — out of
-  scope here; milestone 1 is `run-once`.
+- **Unbuilt prerequisites:** `--project cadence-start` / `--cadence-root` / `--cadence-task` don't exist
+  until Tickets 02/02a — this ticket strictly follows them.
+- **Environment gating:** like pi-harness's base-build ticket, the live run may be blocked by no
+  registry egress + no key. If so, complete every host-verifiable item, record the exact commands here,
+  and keep the ticket open — don't claim the milestone on host checks alone.
+- Never `2>&1` a live run; run it once (billed).

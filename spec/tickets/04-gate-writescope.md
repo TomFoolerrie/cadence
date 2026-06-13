@@ -1,101 +1,89 @@
 # Ticket 04: Write-scope → gate enforce policy (the load-bearing ticket)
 
-**Status:** TODO
+**Status:** TODO (revised 2026-06-13 after review)
 **Repo:** pi-harness (branch `claude/quirky-ptolemy-htwb4n`)
-**Depends on:** 02
-**Source of truth:** pi-harness `harness/gate/policy.ts`, `gate/gate.ts`, `gate/guard.ts`,
-`gate/gate.test.ts`, `spec/pi-skill-harness.md` §9; this repo's `spec/06-separation-of-concerns.md`
-(§6.2 Write Scope Enforcement); `00-integration-design.md`.
+**Depends on:** 02, **02a** (the `cwd=/work/$CADENCE_TASK` forward)
+**Source of truth:** pi-harness `harness/gate/policy.ts` (`classify`, `resolveLexical`, `POLICY.workRoot`,
+the write/edit vs bash branches), `gate/gate.ts` (`makeGate(audit,mode,workDir)`), `gate/guard.ts`
+(fail-closed), `gate/gate.test.ts`; this repo's `spec/06-separation-of-concerns.md` §6.2; `00`, `02a`.
 
-## Why this is the load-bearing ticket
+## Why this is load-bearing
 
-Cadence's reliability rests on **hard boundaries, not instructions**. Its own dry runs proved the
-agent *bypasses* a procedure that only tells it to use the gated scripts — after a long session it
-hand-edited `.class.yaml` directly despite explicit instructions (`notes/open-items.md`, "Post-Dry-Run
-Review"). Claude Code's fix was the `.claude/settings.json` write-scope deny rules. **Pi does not honour
-`.claude/settings.json`.** So if we run Cadence under Pi with the gate in its default *record* mode
-(logs, blocks nothing), we silently regress Cadence's most important invariant. Preserving the hard
-boundary across the runtime swap **is** the integration's security story.
+Cadence's reliability rests on **hard boundaries, not instructions** — the dry runs proved the agent
+hand-edits YAML despite being told not to (`notes/open-items.md`). Claude Code enforces this with
+`.claude/settings.json`. **Pi ignores those files.** And pi-harness's gate today has **no sub-`/work`
+granularity** — `policy.ts` classifies *any* write under `POLICY.workRoot = /work` as `record`/allow
+(`write.work-root`). So a write one level above the task dir but still inside `/work` is **not denied**.
+Running record mode, or enforce mode with only the stock policy, **silently regresses Cadence's most
+important invariant.** This ticket adds the missing granularity. It is net-new policy code, not a
+config flip.
 
-pi-harness already has everything needed: **enforce mode is implemented and tested** (`GATE_MODE=enforce`,
-`gate.ts` returns `{block:true}` on a deny, `guard.ts` fails closed), and `policy.classify()` already
-takes a `cwd`. This ticket authors the *Cadence policy* and runs enforce mode for `cadence-start`.
+## What review established about `policy.ts`
 
-## Design — map the `.claude/settings.json` deny rules to gate rules
+- **No task-subtree or protected-file concept exists** — only the two fixed roots (`workRoot`,
+  `skillRoot`) and root-containment classification. Everything below is new.
+- **The asymmetry is achievable** because `classify()` dispatches on `toolName` into **separate**
+  `write|edit` vs `bash` branches. Deny in the write/edit branch; leave bash untouched.
+- **`set-status.py` via bash classifies as `record` tier, not `allow`** (it's not a known skill script →
+  `bash.unrecognized` → record). Record is **not blocked** in enforce mode (only `deny` blocks), so it
+  passes — but assert `record` (not `allow`) in tests.
+- **`resolveLexical(p, cwd)`** resolves a bare relative path against `cwd`. Today the gate passes
+  `cwd=/work`. For task-relative writes (`workpapers/foo.csv`) to land in the task dir, the gate must
+  receive **`cwd=/work/$CADENCE_TASK`** (Ticket 02a's forward) — this is distinct from passing the task
+  dir as the "scope to check." **Both** are needed.
+- **`classify()` has no composition hook** — its signature is positional. Either add a param
+  (`taskRoot`/`protectedGlobs`, appended or as an options object) and new branches in the write/edit
+  block, or **wrap** `classify()` in a Cadence module that post-processes its result. Wrapping keeps
+  `policy.ts` pure/frozen but moves the rules outside `test:gate` — pick and record.
 
-The Cadence write-scope, per `spec/06-separation-of-concerns.md` §6.2, for a **task agent**:
+## Design — the Cadence policy (scoped to `/work/$CADENCE_TASK`)
 
-```json
-{ "permissions": {
-    "allow": ["Read", "Write(./**)"],
-    "deny":  ["Write(../**)", "Write(./status.yaml)"] } }
-```
-
-Translate to gate policy, scoped to the **active task dir** (`/work/$CADENCE_TASK`):
-
-| Cadence rule | Gate rule (tier) | Applies to tools |
+| Cadence rule (`§6.2`) | Gate rule (tier) | Tools |
 |---|---|---|
-| `deny Write(../**)` (no writes above the task dir) | **deny** any `edit`/`write` whose resolved path is outside `/work/$CADENCE_TASK/` | `edit`, `write` |
-| `deny Write(./status.yaml)` (must use `set-status.py`) | **deny** direct `edit`/`write` to `<task>/status.yaml` | `edit`, `write` |
-| (class-level) `deny Write(./.class.yaml)` | **deny** direct `edit`/`write` to any `*.class.yaml` | `edit`, `write` |
-| "Bash scripts are NOT restricted by Write permissions" | **allow** `bash` invoking `$CADENCE_PLUGIN_ROOT/scripts/*.py` (these are the gated writers) — subject to pi-harness's existing bash safety rules (the `/etc`,`/dev`, out-of-`/work` `rm` denies still apply) | `bash` |
+| `deny Write(../**)` | **deny** `edit`/`write` resolving outside `/work/$CADENCE_TASK/` | edit, write |
+| `deny Write(./status.yaml)` | **deny** direct `edit`/`write` to `<task>/status.yaml` | edit, write |
+| `deny Write(./.class.yaml)` | **deny** direct `edit`/`write` to any `*.class.yaml` | edit, write |
+| "Bash scripts unrestricted by Write" | leave `bash` to the **existing** policy (gated scripts → `record`, dangerous ops still **deny**) | bash |
 
-**The crucial fidelity point:** in Cadence, the gated scripts (`set-status.py`, `edit-class-yaml.py`,
-`init-*.py`) *do* write `status.yaml`/`.class.yaml`/parent dirs — they are infrastructure with their
-own filesystem authority, invoked via `Bash`, which Claude Code's Write-scope does not restrict. The
-gate must reproduce exactly this asymmetry: **deny the agent's direct `edit`/`write` to protected
-paths, but allow `bash`-invoked scripts to do those same writes.** This is the whole point — it forces
-the agent through the state-machine enforcer instead of hand-editing YAML.
+The asymmetry — agent's direct `edit`/`write` to protected paths denied, but `bash`-invoked
+`set-status.py`/`edit-class-yaml.py`/`init-*.py` allowed to make those same writes — is the whole point:
+it forces the agent through the state-machine enforcer.
 
-### How the active scope reaches the policy
+> **Coverage limit (be honest):** the gate sees `bash` command *text*, not files a `bash` command
+> writes. A mutation via `bash` redirection/`cp`/a script is not path-classified. Containment of
+> `bash`-driven escapes comes from (a) the existing dangerous-op/`rm`/`/etc` rules and (b) the container
+> boundary — not from this write-scope. State this; don't over-claim.
 
-`gate.ts` already passes the live `WORK_DIR` as `cwd` to `classify()`. Extend the forwarded config with
-the **active task subdir** and the **protected-file globs** (from Ticket 02's `CADENCE_TASK`). Decide
-the cleanest seam — preferred: a small Cadence policy layer / rule set keyed off a forwarded
-`CADENCE_TASK` (+ derived protected paths), composed with the existing global policy rather than
-editing the shared classifier's core. Keep `policy.ts` pure and host-testable (its tests are its
-contract).
+## Mode
 
-### Mode
-
-`cadence-start` runs `GATE_MODE=enforce` (set by Ticket 02's row/forwarding). This is a **deliberate
-departure** from pi-harness's default `record` — and it must be, because record mode would not
-preserve Cadence's hard boundary. Document this prominently in the row and in `00`.
+`cadence-start` runs `GATE_MODE=enforce` — a **deliberate** departure from pi-harness's `record`
+default (record wouldn't preserve the boundary). Per-project via the row (Ticket 02), not a global flip.
+**Enforce makes fail-closed live:** `guard.ts`/`gate.ts` block on any handler throw, so the new rules
+must be total (bad glob, null `CADENCE_TASK` → must not throw). Test the throw-paths.
 
 ## Work items
 
-- [ ] Author the Cadence gate rules (the table above) as a composable policy layer; keep the core
-      classifier pure.
-- [ ] Forward `CADENCE_TASK` (+ derived protected globs) from the host entrypoint → `session-setup.ts`
-      → `gate.ts` → `classify()` (Ticket 02 forwards the env; this ticket consumes it in the policy).
-- [ ] Run `cadence-start` in **enforce** mode; ensure `guard.ts` fail-closed semantics hold and the
-      record-mode handler-totality rule (catch/record/never-throw) is respected.
-- [ ] **Probe before asserting** (pi-harness discipline): use the host one-liner
-      `node --import tsx -e "import('./gate/policy.ts').then(...)"` to verify real classification of each
-      case before writing the test.
-- [ ] Add `gate.test.ts` cases proving, through the **real gate in enforce mode**:
-      - direct `edit`/`write` to `<task>/status.yaml` → **deny**;
-      - direct `edit`/`write` to a `*.class.yaml` → **deny**;
-      - `edit`/`write` to a path above the task dir → **deny**;
-      - `edit`/`write` **within** the task dir (e.g. `workpapers/…`, `learned.md`) → **allow**;
-      - `bash python $CADENCE_PLUGIN_ROOT/scripts/set-status.py review_ready` → **allow**;
-      - the pre-existing global denies (`rm` outside `/work`, `cat /etc/passwd`) still **deny**
-        (no regression of pi-harness's baseline).
+- [ ] Implement the Cadence rules (table) via the chosen seam (param vs wrapper); keep `policy.ts` pure.
+- [ ] Consume Ticket 02a's `cwd=/work/$CADENCE_TASK` for **both** path resolution and the task-scope
+      check; derive the protected globs (`status.yaml`, `*.class.yaml`) from it.
+- [ ] **Probe before asserting** (host one-liner over `policy.ts`) for each case below.
+- [ ] `gate.test.ts` cases through the **real gate in enforce mode**, with `workDir=/work/<task>`:
+      - direct `edit`/`write` to `<task>/status.yaml` → **deny**
+      - direct `edit`/`write` to a `*.class.yaml` → **deny**
+      - `edit`/`write` resolving outside the task dir (e.g. `../foo`, `/etc/x`) → **deny**
+      - `edit`/`write` within the task dir (`workpapers/x.csv`, `learned.md`) → **allow**
+      - `bash python $CADENCE_PLUGIN_ROOT/scripts/set-status.py review_ready` → **record** (not `allow`)
+      - regression: `rm` outside `/work`, `cat /etc/passwd` → still **deny**
+      - throw-path: null/empty `CADENCE_TASK` and a malformed glob → handler does **not** throw (fails
+        safe, not open) and the run isn't bricked.
 
 ## Acceptance
 
-- `npm test` (pi-harness) green incl. the new `gate.test.ts` cases; typecheck clean; `policy.ts` stays
-  pure (no I/O).
-- The asymmetry is demonstrably correct: agent can't touch `status.yaml`/`.class.yaml`/parent dirs
-  directly, but the gated scripts can — exactly reproducing `.claude/settings.json` §6.2.
-- Live confirmation (gate actually blocking a real over-reach without breaking a legitimate run) is
-  Ticket 06.
+- `npm test` green incl. new cases; typecheck clean; `policy.ts` stays pure.
+- The asymmetry demonstrably holds; a write one level above the task dir (still in `/work`) is now
+  **denied** (it wasn't before this ticket).
+- Live confirmation (real block without breaking a legit run) is Ticket 06.
 
-## Notes / risks
+## Notes
 
-- **False-positive risk** is the thing to watch — pi-harness already hit two record-mode false
-  positives (a bare relative `edit` path; `rm -rf /work/unpacked`) and fixed them with `cwd` resolution
-  + path-scoping. Re-use that hard-won approach: resolve the agent's relative `edit`/`write` path under
-  `/work/$CADENCE_TASK` before classifying, or a legitimate `workpapers/foo.csv` write will be denied.
-- Do **not** weaken pi-harness's existing global bash rules to make room for Cadence; compose, don't
-  loosen.
+- Don't loosen pi-harness's existing global bash rules to fit Cadence — compose, don't weaken.
