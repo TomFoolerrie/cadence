@@ -103,6 +103,10 @@ def main() -> int:
     cwd = Path.cwd()
 
     # --- Preconditions ---
+    if "/" in name or name.startswith("."):
+        print("Invalid task name", file=sys.stderr)
+        return 1
+
     class_yaml = cwd / ".class.yaml"
     if not class_yaml.is_file():
         print("Not in a class directory (no .class.yaml)", file=sys.stderr)
@@ -117,6 +121,10 @@ def main() -> int:
         return 1
 
     task_dir = cwd / name
+    if not str(task_dir.resolve()).startswith(str(cwd.resolve()) + "/"):
+        print("Invalid task name", file=sys.stderr)
+        return 1
+
     if task_dir.exists():
         print(f"Directory {name}/ already exists", file=sys.stderr)
         return 1

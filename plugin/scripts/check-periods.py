@@ -171,7 +171,11 @@ def main() -> int:
 
     # Determine "today"
     if args.as_of:
-        today = date.fromisoformat(args.as_of)
+        try:
+            today = date.fromisoformat(args.as_of)
+        except ValueError:
+            print(f"Invalid date: {args.as_of!r}", file=sys.stderr)
+            return 1
     else:
         today = date.today()
 
@@ -208,69 +212,77 @@ def main() -> int:
                 period_format = task_entry.get("period_format", "monthly")
                 anchor = task_entry.get("anchor", "first_monday")
 
+                if not task_name or "/" in task_name or task_name.startswith("."):
+                    print(f"Warning: skipping invalid task name {task_name!r}", file=sys.stderr)
+                    continue
+
                 if not enabled:
                     continue
                 if period_format == "adhoc":
                     continue
 
-                # Read task status.yaml
-                status_path = entry / task_name / "status.yaml"
-                if not status_path.exists():
-                    continue
+                try:
+                    # Read task status.yaml
+                    status_path = entry / task_name / "status.yaml"
+                    if not status_path.exists():
+                        continue
 
-                with open(status_path) as f:
-                    status_data = yaml.safe_load(f)
+                    with open(status_path) as f:
+                        status_data = yaml.safe_load(f)
 
-                status = status_data.get("status", "")
-                if status not in ("done", "abandoned"):
-                    continue
+                    status = status_data.get("status", "")
+                    if status not in ("done", "abandoned"):
+                        continue
 
-                done_at_str = status_data.get("done_at")
-                if not done_at_str:
-                    continue
+                    done_at_str = status_data.get("done_at")
+                    if not done_at_str:
+                        continue
 
-                current_period = status_data.get("period", "")
+                    current_period = status_data.get("period", "")
+                    if not current_period:
+                        continue  # task never had a period set
 
-                # Compute next period and anchor date (one-ahead)
-                next_per = next_period_string(current_period, period_format)
-                anchor_date = compute_anchor_date(
-                    current_period, period_format, anchor,
-                )
-
-                # Late-completion guard: if the task was finished after
-                # the anchor already passed, push to the next cycle.
-                done_at = datetime.fromisoformat(
-                    done_at_str.replace("Z", "+00:00")
-                ).date()
-                if anchor_date <= done_at:
-                    skipped_per = next_per
-                    next_per = next_period_string(next_per, period_format)
+                    # Compute next period and anchor date (one-ahead)
+                    next_per = next_period_string(current_period, period_format)
                     anchor_date = compute_anchor_date(
-                        skipped_per, period_format, anchor,
+                        current_period, period_format, anchor,
                     )
 
-                if today >= anchor_date:
-                    schema_version = status_data.get("schema_version", 1)
+                    # Late-completion guard: if the task was finished after
+                    # the anchor already passed, push to the next cycle.
+                    done_at = datetime.fromisoformat(
+                        done_at_str.replace("Z", "+00:00")
+                    ).date()
+                    if anchor_date <= done_at:
+                        skipped_per = next_per
+                        next_per = next_period_string(next_per, period_format)
+                        anchor_date = compute_anchor_date(
+                            skipped_per, period_format, anchor,
+                        )
 
-                    new_status = {
-                        "schema_version": schema_version,
-                        "period": next_per,
-                        "status": "not_started",
-                        "issues": [],
-                        "done_at": None,
-                    }
+                    if today >= anchor_date:
+                        new_status = dict(status_data)
+                        new_status.update({
+                            "period": next_per,
+                            "status": "not_started",
+                            "issues": [],
+                            "done_at": None,
+                        })
 
-                    with open(status_path, "w") as f:
-                        yaml.dump(new_status, f, default_flow_style=False, sort_keys=False)
+                        with open(status_path, "w") as f:
+                            yaml.dump(new_status, f, default_flow_style=False, sort_keys=False)
 
-                    reset_count += 1
-                    reset_details.append(
-                        f"reset {task_name} ({current_period} \u2192 {next_per})"
-                    )
-                else:
-                    skip_details.append(
-                        f"skipped {task_name} (next anchor: {anchor_date.isoformat()})"
-                    )
+                        reset_count += 1
+                        reset_details.append(
+                            f"reset {task_name} ({current_period} \u2192 {next_per})"
+                        )
+                    else:
+                        skip_details.append(
+                            f"skipped {task_name} (next anchor: {anchor_date.isoformat()})"
+                        )
+                except Exception as exc:
+                    print(f"Warning: skipping task {task_name!r} in {class_name}: {exc}", file=sys.stderr)
+                    continue
 
             # Stdout summary
             if reset_details:
@@ -286,15 +298,17 @@ def main() -> int:
             # Git commit per class (if any resets)
             if reset_count > 0:
                 try:
-                    subprocess.run(
+                    r_add = subprocess.run(
                         ["git", "add", str(entry) + "/"],
                         cwd=str(root), capture_output=True,
                     )
-                    subprocess.run(
+                    r_commit = subprocess.run(
                         ["git", "commit", "-m",
                          f"[check] {class_name}: reset {reset_count} tasks for new period"],
                         cwd=str(root), capture_output=True,
                     )
+                    if r_add.returncode != 0 or r_commit.returncode != 0:
+                        print(f"Warning: git commit failed for {class_name}", file=sys.stderr)
                 except FileNotFoundError:
                     pass  # git not available
 

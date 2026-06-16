@@ -169,3 +169,10 @@ class TestPreconditions:
         result = run_script("init-task.py", ["my-task"], cwd=tmp_path)
         assert result.returncode != 0
         assert "Traceback" not in result.stderr
+
+    def test_path_traversal_rejected(self, class_dir):
+        """Path traversal names like ../evil exit 1 without creating files."""
+        result = run_script("init-task.py", ["../evil"], cwd=class_dir)
+        assert result.returncode == 1
+        assert not (class_dir.parent / "evil").exists()
+        assert "Traceback" not in result.stderr

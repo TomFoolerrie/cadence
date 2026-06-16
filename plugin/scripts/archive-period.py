@@ -68,8 +68,15 @@ def main() -> int:
         return 1
 
     # --- Read engagement name ---
-    with open(root / ".context-root") as f:
-        root_data = yaml.safe_load(f)
+    try:
+        with open(root / ".context-root") as f:
+            root_data = yaml.safe_load(f)
+        if not isinstance(root_data, dict):
+            print("Corrupt .context-root", file=sys.stderr)
+            return 2
+    except (yaml.YAMLError, OSError) as e:
+        print(f"Could not read .context-root: {e}", file=sys.stderr)
+        return 2
     engagement = root_data.get("engagement", "")
 
     # --- Determine class and task names from path ---

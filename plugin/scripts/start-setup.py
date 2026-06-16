@@ -32,7 +32,7 @@ def _run_script(name: str, args: list):
 
 def _set_blocked(reason: str) -> None:
     """Attempt to set status to blocked. Warns on failure but does not raise."""
-    result = _run_script("set-status.py", ["blocked", reason])
+    result = _run_script("set-status.py", ["blocked", "--", reason])
     if result.returncode != 0:
         print(
             f"Warning: could not set blocked status: {result.stderr.strip()}",

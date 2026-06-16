@@ -105,8 +105,12 @@ def cmd_add_task(args):
     if find_task_index(manifest, args.task) != -1:
         raise ScriptValidationError(f"Task '{args.task}' already in manifest")
 
-    # Validate task directory exists with SKILL.md
+    # Validate task name and directory
+    if "/" in args.task or args.task.startswith("."):
+        raise ScriptValidationError("Invalid task name")
     task_dir = Path.cwd() / args.task
+    if not str(task_dir.resolve()).startswith(str(Path.cwd().resolve()) + "/"):
+        raise ScriptValidationError("Invalid task name")
     if not task_dir.is_dir():
         raise ScriptValidationError(f"Task directory '{args.task}' does not exist")
     if not (task_dir / "SKILL.md").is_file():

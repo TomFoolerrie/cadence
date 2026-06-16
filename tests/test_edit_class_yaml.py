@@ -474,4 +474,14 @@ class TestEdgeCases:
 
         result = run_script(SCRIPT, ["set-description", "test"], cwd=tmp_path)
         assert result.returncode == 2
+
+    def test_add_task_path_traversal_rejected(self, tmp_path):
+        """add-task rejects task names containing path traversal sequences."""
+        root = make_context_root(tmp_path)
+        cls = make_class(root, "treasury", manifest=[])
+
+        result = run_script(SCRIPT, ["add-task", "../evil", "--order", "1"], cwd=cls)
+        assert result.returncode == 1
+        assert not (root / "evil").exists()
+        assert "Traceback" not in result.stderr
         assert "Traceback" not in result.stderr

@@ -18,6 +18,10 @@ def main() -> int:
 
     # --- Preconditions (validate before writing) ---
 
+    if "/" in name or name.startswith("."):
+        print("Invalid class name", file=sys.stderr)
+        return 1
+
     context_root = cwd / ".context-root"
     if not context_root.is_file():
         print("Not at engagement root (no .context-root)", file=sys.stderr)
@@ -32,6 +36,10 @@ def main() -> int:
         return 1
 
     target = cwd / name
+    if not str(target.resolve()).startswith(str(cwd.resolve()) + "/"):
+        print("Invalid class name", file=sys.stderr)
+        return 1
+
     if target.exists():
         print(f"Directory {name}/ already exists", file=sys.stderr)
         return 1
