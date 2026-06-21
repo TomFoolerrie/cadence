@@ -49,18 +49,43 @@ gate, not model judgment.
 
 ## Work items
 
-- [ ] Build the fixture engagement (or generator) + commit; document regeneration and the `.gitignore`
-      override decision.
-- [ ] **Host pre-flight** (no billed run):
-      - pi-harness typecheck (CI list) + `npm test` green (incl. 02/02a/04/05 additions);
-      - cadence `python -m pytest tests/` green (incl. 01 additions);
-      - **offline dry-run `start-setup.py` over the fixture on the host** (catches a non-empty-requirements
-        regression before burning a billed run);
-      - `docker`-argv stub for `--project cadence-start` (mounts, env, `cwd=/work/<task>`,
-        `GATE_MODE=enforce`, `AUDIT_ROOT=/runs`).
-- [ ] **Live run** (needs Docker + key + registry egress):
-      `./run --project cadence-start --cadence-root <cadence> --cadence-task treasury/monthly-bank-fees --work <fixture>`
-      then `./run --project cadence-start --task verify --work <fixture>`.
+- [x] **Build the fixture engagement (or generator) + commit; document regeneration and the `.gitignore`
+      override decision.** BUILT (2026-06-21): generator at `tests/fixtures/generate_fixture.py`
+      (mirrors pi-harness `src/fixtures/`) + `tests/fixtures/README.md`. It drives the REAL init scripts
+      (`init-engagement.py` -> `init-class.py` -> `init-task.py`, then the period tree + customisation),
+      so it cannot drift from production scaffolding. GOOD seed (`--seed good`, plus `--period-unset` for
+      the period-computation path) and BAD seed (`--seed bad`). The `.gitignore` collision is resolved by
+      force-adding the seeded CSV (`git add -f`) and treating the workpaper as a working-tree artifact
+      (documented in the generator docstring + README).
+- [x] **Host pre-flight** (no billed run) — the cadence-side items:
+      - [x] cadence `python -m pytest tests/` green: **326 passed, 1 failed** — the single failure is the
+        pre-existing date-sensitive `test_e2e_period_reset.py::...test_done_then_check_periods_resets`
+        (unrelated to this ticket); everything else (incl. the 11 new fixture tests) passes.
+      - [x] **offline dry-run `start-setup.py` over the GOOD fixture on the host**
+        (`test_e2e_fixture.py::test_start_setup_offline_dry_run`): asserts exit 0, status -> `in_progress`,
+        context loads, and NO pip/network (empty requirements => `install-deps.py` no-op). Plus a direct
+        `install-deps` no-op assertion and an end-to-end task-tool run producing the balanced workpaper
+        (`total: 50.00`). This is the regression catch before any billed run.
+      - [ ] pi-harness typecheck (CI list) + `npm test` green (incl. 02/02a/04/05 additions) — pi-harness
+        repo, not done in this cadence-fixture change.
+      - [ ] `docker`-argv stub for `--project cadence-start` (mounts, env, `cwd=/work/<task>`,
+        `GATE_MODE=enforce`, `AUDIT_ROOT=/runs`) — pi-harness repo.
+- [ ] **Live run** — BLOCKED in this sandbox (no Docker-registry egress + no key); follows the
+      pi-harness "one live run" discipline. Exact 2-command checklist once a Docker host + key are
+      available (run from pi-harness `harness/`; `<fixture>` = a freshly generated GOOD fixture, `<cadence>`
+      = a clone of this repo):
+      ```bash
+      # 0) generate a fresh GOOD fixture engagement (offline):
+      python <cadence>/tests/fixtures/generate_fixture.py /tmp/fx-good --seed good
+      # 1) autonomous /start (one billed run; never 2>&1):
+      ./run --project cadence-start --cadence-root <cadence> \
+            --cadence-task treasury/monthly-bank-fees --work /tmp/fx-good
+      # 2) verify the result (Stage B):
+      ./run --project cadence-start --task verify --work /tmp/fx-good
+      ```
+      Bad-seed deny run: regenerate with `--seed bad` into `/tmp/fx-bad` and repeat step 1; the gate
+      must emit a `deny` entry (`write.outside-task-scope`) in `audit.jsonl`, leave the engagement
+      unmodified/uncommitted, and the verifier (step 2) must exit non-zero.
 - [ ] **Capture evidence:** the git commit on the host (assert **exactly one**, message
       `[start] monthly-bank-fees <period>: …`); `status.yaml` = `review_ready` with `issues: []`; the
       workpaper (working-tree); `/runs/audit/<run_id>/{audit.jsonl,manifest.json}`; **absence of any
