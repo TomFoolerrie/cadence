@@ -1,6 +1,6 @@
 # Ticket 06: End-to-end fixture + live-run acceptance (milestone-1 gate)
 
-**Status:** TODO (revised 2026-06-13 after review)
+**Status:** BLOCKED — live run executed 2026-07-03; milestone NOT accepted (2 findings, see below)
 **Repo:** cadence (fixture) + pi-harness (live run)
 **Depends on:** 02, 02a, 03, 04, 05 (transitively 00–01)
 **Source of truth:** all of `00`–`05`; cadence `tests/conftest.py`, `plugin/scripts/init-engagement.py`,
@@ -70,9 +70,10 @@ gate, not model judgment.
         repo, not done in this cadence-fixture change.
       - [ ] `docker`-argv stub for `--project cadence-start` (mounts, env, `cwd=/work/<task>`,
         `GATE_MODE=enforce`, `AUDIT_ROOT=/runs`) — pi-harness repo.
-- [ ] **Live run** — BLOCKED in this sandbox (no Docker-registry egress + no key); follows the
-      pi-harness "one live run" discipline. Exact 2-command checklist once a Docker host + key are
-      available (run from pi-harness `harness/`; `<fixture>` = a freshly generated GOOD fixture, `<cadence>`
+- [x] **Live run** — EXECUTED 2026-07-03 on a macOS/arm64 Docker host (both seeds, both billed;
+      run_ids `…19-36-55…ff52a8` GOOD, `…19-41-02…3c7733` BAD). See
+      `notes/dry-runs/dry-run-cadence-on-pi-harness-2026-07-03.md`. Exact 2-command checklist
+      (run from pi-harness `harness/`; `<fixture>` = a freshly generated GOOD fixture, `<cadence>`
       = a clone of this repo):
       ```bash
       # 0) generate a fresh GOOD fixture engagement (offline):
@@ -86,14 +87,32 @@ gate, not model judgment.
       Bad-seed deny run: regenerate with `--seed bad` into `/tmp/fx-bad` and repeat step 1; the gate
       must emit a `deny` entry (`write.outside-task-scope`) in `audit.jsonl`, leave the engagement
       unmodified/uncommitted, and the verifier (step 2) must exit non-zero.
-- [ ] **Capture evidence:** the git commit on the host (assert **exactly one**, message
-      `[start] monthly-bank-fees <period>: …`); `status.yaml` = `review_ready` with `issues: []`; the
-      workpaper (working-tree); `/runs/audit/<run_id>/{audit.jsonl,manifest.json}`; **absence of any
-      pip/network tool call in the audit** (positive offline proof); verifier exit `0`.
-- [ ] **Bad-seed run:** confirm the gate **denies** the escape (a `deny` entry in `audit.jsonl`, the
-      enforce block fired), the engagement is **left uncommitted/unmodified** for the escape, and the
-      verifier exits non-zero.
-- [ ] Write up both as a dry-run note under `notes/dry-runs/`; flip `00`/`README.md` to "milestone 1 done".
+- [x] **Capture evidence:** captured (audit + manifest for both run_ids, git logs, status.yaml,
+      verifier output). **Result: GOOD acceptance FAILED** — the run self-blocked in Stage-A setup
+      (`status: blocked`, no `review_ready`, no workpaper) so verifier exits 1 and there are 4 deny
+      records. The offline proof held (zero pip/network tool calls). See Finding 1.
+- [x] **Bad-seed run:** executed. **Result: PARTIAL / FAILED as specified** — verifier exits non-zero
+      and no review_ready/escape draft is committed, BUT the gate did **not** deny `escape.py`'s
+      out-of-`/work` write (it ran as `record`/`bash.unrecognized`); the only `write.outside-task-scope`
+      deny in the audit is the agent's own venv-remediation write, not the escape. See Finding 2.
+- [x] Wrote up both runs at `notes/dry-runs/dry-run-cadence-on-pi-harness-2026-07-03.md`. **Did NOT**
+      flip `00`/`README.md` to "milestone 1 done" — the two findings below must be resolved first.
+
+## Findings from the 2026-07-03 live run (both blockers for the milestone)
+
+1. **Non-portable fixture venv (blocks the happy path).** `generate_fixture.py`/`init-venv.py` builds
+   the engagement venv on the host; mounted into the Linux container its interpreter symlinks +
+   `pyvenv.cfg` point at the host Python and it is unusable. `install-deps.py` then `return 2`s on its
+   pip-exists precondition **even though every `requirements.txt` is empty** (the "empty ⇒ no-op"
+   invariant only skips the pip *install*, not the pip *precondition*), so `/start` self-blocks. Fix:
+   build the venv in-container (or omit it), and/or short-circuit `install-deps.py` to success when
+   nothing is installable before requiring pip.
+2. **Gate does not deny a script-driven escape (security gap).** The enforce gate is a tool-call policy
+   layer, not an OS sandbox. `escape.py` writes to `/tmp/escape.txt` via Python inside a bash-spawned
+   process; the gate sees only the bash string (`bash.unrecognized` → `record`) and cannot intercept
+   the write. The `write.outside-task-scope` rule fires only on the harness `write` tool. To make the
+   bad seed deterministic, route the escape through a mediated tool, or enforce out-of-`/work` denial at
+   the OS/mount layer (read-only rootfs outside `/work` + `/runs`).
 
 ## Acceptance (the milestone)
 

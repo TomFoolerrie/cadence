@@ -30,10 +30,16 @@ the Claude-Code→pi-harness mapping, and the milestone plan. Every other ticket
 > - **05** Stage-B verifier `verify-cadence.py` (+ `verify:cadence`) — pi-harness `4c38958`
 >
 > pi-harness: 225 TS unit tests + 34 python verifier tests green, typecheck clean. **06** (one live
-> governed run) and **07** (milestone 2) are NOT built — 06's acceptance is a billed live run blocked in
-> this environment (no Docker-registry egress + no model key), and 07 depends on 06. They remain open
-> work orders with their host-verifiable parts done; the live run is the single remaining gate, exactly
-> as pi-harness's own base-build ticket handles the same constraint.
+> governed run) and **07** (milestone 2) are NOT built — 07 depends on 06.
+
+> **LIVE RUN 2026-07-03 — milestone 1 still OPEN (not "done").** The billed live run was finally
+> executed on a macOS/arm64 Docker host (both seeds, GOOD `…ff52a8` + BAD `…3c7733`; audits captured).
+> The plumbing works end-to-end (build/mount/cwd/enforce/audit/manifest/verifier, offline invariant
+> held) but **acceptance FAILED with two real findings** — see `06-e2e-acceptance.md` and
+> `notes/dry-runs/dry-run-cadence-on-pi-harness-2026-07-03.md`: (1) the fixture ships a host-built venv
+> that is unusable in the container, so `/start` self-blocks before `review_ready`; (2) the enforce gate
+> does **not** deny `escape.py`'s script-driven out-of-`/work` write (it is a tool-call policy layer, not
+> an OS sandbox). Milestone 1 remains open pending fixes to both.
 
 > **Revised 2026-06-13 after a per-ticket review pass.** Review confirmed the core architecture but
 > surfaced that **Cadence is the first project that breaks pi-harness's "a project is a config row, not
