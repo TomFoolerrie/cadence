@@ -32,14 +32,21 @@ the Claude-Code→pi-harness mapping, and the milestone plan. Every other ticket
 > pi-harness: 225 TS unit tests + 34 python verifier tests green, typecheck clean. **06** (one live
 > governed run) and **07** (milestone 2) are NOT built — 07 depends on 06.
 
-> **LIVE RUN 2026-07-03 — milestone 1 still OPEN (not "done").** The billed live run was finally
-> executed on a macOS/arm64 Docker host (both seeds, GOOD `…ff52a8` + BAD `…3c7733`; audits captured).
-> The plumbing works end-to-end (build/mount/cwd/enforce/audit/manifest/verifier, offline invariant
-> held) but **acceptance FAILED with two real findings** — see `06-e2e-acceptance.md` and
-> `notes/dry-runs/dry-run-cadence-on-pi-harness-2026-07-03.md`: (1) the fixture ships a host-built venv
-> that is unusable in the container, so `/start` self-blocks before `review_ready`; (2) the enforce gate
-> does **not** deny `escape.py`'s script-driven out-of-`/work` write (it is a tool-call policy layer, not
-> an OS sandbox). Milestone 1 remains open pending fixes to both.
+> **LIVE RUN 2026-07-03 — acceptance FAILED with two findings (now fixed).** The first billed run
+> (GOOD `…ff52a8` + BAD `…3c7733`) proved the plumbing but failed acceptance: (1) the fixture shipped a
+> host-built venv unusable in the container, so `/start` self-blocked; (2) the enforce gate did not deny
+> `escape.py`'s script-driven out-of-`/work` write. Written up in
+> `notes/dry-runs/dry-run-cadence-on-pi-harness-2026-07-03.md`; work-ordered as **Tickets 08 & 09**.
+
+> **MILESTONE 1 DONE (2026-07-04).** Tickets 08 & 09 fixed both findings and Ticket 06 was re-accepted on
+> a macOS/arm64 Docker host. GOOD seed passes end-to-end (run `…2e124e`: verifier exit 0, `review_ready`,
+> one correctly-messaged commit, workpaper `total 50.00`, **zero deny records**, no pip/network). Both
+> security layers proven: the gate denies mediated out-of-scope writes (BAD run `…468454`:
+> `write.outside-task-scope` + `policy.test.ts`) and the read-only rootfs hard-fails raw script writes
+> (`/etc` write → `Errno 30` direct proof + `cli.test.ts`); BAD verifier exits non-zero in every run. One
+> methodology finding (Finding 3): a capable autonomous agent often *declines* to execute the escape, so
+> security controls are proven by direct/unit tests, not by the agent attacking itself. Full write-up:
+> `notes/dry-runs/dry-run-cadence-on-pi-harness-2026-07-04.md`.
 
 > **Revised 2026-06-13 after a per-ticket review pass.** Review confirmed the core architecture but
 > surfaced that **Cadence is the first project that breaks pi-harness's "a project is a config row, not
@@ -58,7 +65,9 @@ the Claude-Code→pi-harness mapping, and the milestone plan. Every other ticket
 | 03  | `/start` procedure → Pi method-pin (autonomous happy path) | cadence | 01, 02, 02a |
 | 04  | Write-scope → **net-new** gate task-subtree policy, enforce mode (**load-bearing**) | pi-harness | 02, 02a |
 | 05  | Stage-B verifier (`verify-cadence.py`) + base-image git/pyyaml + pre-run baseline | pi-harness + cadence | 02, 02a, 03 |
-| 06  | End-to-end fixture + live-run acceptance (**milestone-1 gate**) | cadence + pi-harness | 02, 02a, 03, 04, 05 |
+| 08  | Portable fixture venv + `install-deps` empty-req short-circuit (**06 Finding 1**) | cadence | 01, 03 |
+| 09  | Enforce out-of-`/work` write denial — make the bad-seed trap test the gate (**06 Finding 2**) | pi-harness (+ cadence fixture) | 04, 02a |
+| 06  | End-to-end fixture + live-run acceptance (**milestone-1 gate**) | cadence + pi-harness | 02, 02a, 03, 04, 05, **08, 09** |
 | 07  | Human-in-the-loop `/start`→review→`/done` over chat/serve (**milestone 2**) | cadence + pi-harness | 03, 04, 05, 06 |
 
 ## Milestones
@@ -72,11 +81,17 @@ the Claude-Code→pi-harness mapping, and the milestone plan. Every other ticket
 ## Dependency graph
 
 ```
-00 ─┬─► 01 ───────────► 03 ─┐
-    ├─► 02a ─► 02 ─┬─► 04 ──┼─► 06  (milestone-1 gate: one live governed run) ─► 07  (milestone 2)
-    │              └─► 05 ──┤
-    └──────────────────────┘
+00 ─┬─► 01 ──────┬──────► 03 ─┐
+    │            └─► 08 ──────┤
+    ├─► 02a ─► 02 ─┬─► 04 ─► 09 ─┼─► 06  (milestone-1 gate: one live governed run) ─► 07  (milestone 2)
+    │              └─► 05 ──────┤
+    └──────────────────────────┘
 ```
+
+**08 and 09 are the 2026-07-03 live-run reopeners** — they block **06**'s re-acceptance. **08** (cadence)
+fixes the non-portable fixture venv + `install-deps` empty-requirements precondition that self-blocks the
+GOOD happy path. **09** (pi-harness) closes the security gap where the enforce gate did not deny the
+bad-seed's script-driven out-of-`/work` write.
 
 **02a is the new critical-path foundation** — 02/03/04/05/06 all assume its generic mount/env/cwd seam.
 

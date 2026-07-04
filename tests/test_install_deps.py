@@ -27,8 +27,8 @@ pytestmark = pytest.mark.mid
 # ---------------------------------------------------------------------------
 
 
-def run_install_deps(cwd):
-    return run_script("install-deps.py", [], cwd=cwd)
+def run_install_deps(cwd, env=None):
+    return run_script("install-deps.py", [], cwd=cwd, env=env)
 
 
 # ---------------------------------------------------------------------------
@@ -112,10 +112,41 @@ class TestPreconditions:
         assert "No .context-root found" in result.stderr
 
     def test_falls_back_to_system_pip_when_no_venv(self, tmp_path):
-        """Falls back to system pip when no venv exists (sandbox mode)."""
+        """Falls back to system pip when no venv exists (sandbox mode).
+
+        Requires a NON-empty requirements.txt so the pip-resolution path is
+        actually exercised — with an empty requirements file the run
+        short-circuits to 0 before ever resolving pip.
+        """
         root = make_context_root(tmp_path)
+        # Non-empty (already-installed dep) so the pip fallback path runs and
+        # the install succeeds without touching the network.
+        (root / "requirements.txt").write_text("pip\n")
         result = run_install_deps(root)
         # Should succeed using system pip, not fail
         assert result.returncode == 0
         assert "No venv found" in result.stderr
         assert "using system pip" in result.stderr
+
+    def test_empty_requirements_no_pip_returns_0(self, tmp_path, monkeypatch):
+        """Empty/absent requirements + no venv + no system pip ⇒ short-circuit to 0.
+
+        Regression for the exact live failure: an offline engagement whose every
+        requirements.txt is empty must be a no-op success, never `return 2`.
+        Simulate "no system pip" by clearing PATH so shutil.which finds nothing.
+        """
+        root = make_context_root(tmp_path)  # seeds an empty requirements.txt
+        # Run with an empty PATH so no system pip is discoverable. If the code
+        # short-circuits correctly it never reaches pip resolution anyway.
+        result = run_install_deps(root, env={"PATH": ""})
+        assert result.returncode == 0
+        # Pip is never resolved, so the fallback messages must NOT appear.
+        assert "No venv found" not in result.stderr
+
+    def test_nonempty_requirements_no_pip_returns_2(self, tmp_path):
+        """Non-empty requirements + no venv + no system pip ⇒ preserved return 2."""
+        root = make_context_root(tmp_path)
+        (root / "requirements.txt").write_text("some-real-dep\n")
+        result = run_install_deps(root, env={"PATH": ""})
+        assert result.returncode == 2
+        assert "no system pip available" in result.stderr

@@ -155,18 +155,24 @@ def run_script(
     args: Optional[List[str]] = None,
     cwd: Optional[Path] = None,
     timeout: int = 10,
+    env: Optional[Dict[str, str]] = None,
 ) -> subprocess.CompletedProcess:
     """
     Run scripts/<script_name> via the current Python interpreter.
+
+    `env`, if given, overrides keys in the inherited environment (e.g. clearing
+    PATH to simulate "no system pip").
 
     Returns subprocess.CompletedProcess with stdout, stderr, returncode.
     """
     script_path = SCRIPTS_DIR / script_name
     cmd = [sys.executable, str(script_path)] + (args or [])
-    env = {"PYTHONDONTWRITEBYTECACHE": "1"}
+    base_env = {"PYTHONDONTWRITEBYTECACHE": "1"}
 
     full_env = os.environ.copy()
-    full_env.update(env)
+    full_env.update(base_env)
+    if env:
+        full_env.update(env)
 
     return subprocess.run(
         cmd,

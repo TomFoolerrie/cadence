@@ -1,6 +1,9 @@
 # Ticket 06: End-to-end fixture + live-run acceptance (milestone-1 gate)
 
-**Status:** BLOCKED — live run executed 2026-07-03; milestone NOT accepted (2 findings, see below)
+**Status:** DONE — re-accepted 2026-07-04 after Tickets 08 & 09 fixed the two 2026-07-03 findings.
+GOOD seed passes end-to-end (verifier 0, review_ready, zero denies); both security layers proven (gate
+deny + read-only rootfs). See `notes/dry-runs/dry-run-cadence-on-pi-harness-2026-07-04.md`. (History of
+the failing first run + the two findings is retained below.)
 **Repo:** cadence (fixture) + pi-harness (live run)
 **Depends on:** 02, 02a, 03, 04, 05 (transitively 00–01)
 **Source of truth:** all of `00`–`05`; cadence `tests/conftest.py`, `plugin/scripts/init-engagement.py`,

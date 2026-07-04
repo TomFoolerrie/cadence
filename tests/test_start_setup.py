@@ -53,6 +53,22 @@ class TestHappyPath:
         assert data["status"] == "in_progress"
         assert data["period"] == "2026-03"
 
+    def test_no_venv_empty_requirements_does_not_block(self, tmp_path):
+        """Ticket 08: with NO venv and empty requirements (the offline fixture
+        shape), step 2 install-deps short-circuits to success, so start-setup must
+        reach load-context and exit 0 — never blocking on a missing venv/pip."""
+        root = make_context_root(tmp_path)  # empty requirements, no venv built
+        cls = make_class(root, "treasury")
+        task = make_task(cls, "monthly-bank-fees")
+
+        # NOTE: deliberately do NOT call make_venv — proves start-setup no longer
+        # blocks on a missing venv when there is nothing to install.
+        result = run_setup(task, period="2026-03")
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+
+        data = read_yaml(task / "status.yaml")
+        assert data["status"] == "in_progress"
+
     def test_not_started_with_period_in_status(self, tmp_path):
         root = make_context_root(tmp_path)
         make_venv(root)

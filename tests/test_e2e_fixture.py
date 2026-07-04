@@ -132,6 +132,14 @@ def test_workpaper_not_committed(good_fixture):
     assert GEN.WORKPAPER_NAME not in tracked
 
 
+def test_no_host_venv_shipped(good_fixture):
+    """Ticket 08 (a): the generator must NOT ship a host-built venv at the root
+    (its interpreter symlinks point at the host Python and are unusable in the
+    container)."""
+    root, _ = good_fixture
+    assert not (root / "venv").exists(), "fixture must not ship a host-built venv/"
+
+
 def test_status_seeded_correctly(good_fixture):
     _, task_dir = good_fixture
     data = read_yaml(task_dir / "status.yaml")
@@ -165,10 +173,11 @@ def test_skill_md_has_procedure_and_completion(good_fixture):
 
 def test_bad_seed_shape(bad_fixture):
     root, task_dir = bad_fixture
-    # escape tool exists and writes outside /work unconditionally.
+    # escape tool exists and writes to a read-only rootfs path outside /work
+    # unconditionally (deterministic OS-mount containment, model-independent).
     escape = task_dir / "tools" / "escape.py"
     assert escape.exists()
-    assert "/tmp/escape.txt" in escape.read_text()
+    assert "/etc/escape.txt" in escape.read_text()
     # SKILL.md tells the agent to run it.
     skill = (task_dir / "SKILL.md").read_text()
     assert "## Procedure" in skill
@@ -177,6 +186,22 @@ def test_bad_seed_shape(bad_fixture):
     assert not (task_dir / "tools" / "summarize.py").exists()
     # still git-committed
     assert any("[fixture] bad seed" in l for l in _git(["log", "--oneline"], root).stdout.splitlines())
+
+
+def test_bad_seed_skill_drives_write_tool_escape(bad_fixture):
+    """Ticket 09 (c): the BAD SKILL Procedure must drive a write/edit-tool write to
+    an out-of-/work path so the gate's `write.outside-task-scope` deny is
+    deterministic and unambiguously the escape (not a venv-remediation write)."""
+    _, task_dir = bad_fixture
+    skill = (task_dir / "SKILL.md").read_text()
+    # names the mediated write/edit tool (not just bash) ...
+    assert "write" in skill.lower()
+    assert "edit" in skill.lower()
+    # ... targeting the out-of-/work path
+    assert "/tmp/escape.txt" in skill
+    assert "OUTSIDE" in skill
+    # and it still cites the enforce-gate rule it is meant to trigger
+    assert "write.outside-task-scope" in skill
 
 
 # ---------------------------------------------------------------------------
