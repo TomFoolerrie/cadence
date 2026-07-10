@@ -61,19 +61,6 @@ def main() -> int:
         print("No .context-root found in any ancestor directory", file=sys.stderr)
         return 1
 
-    # Resolve pip — prefer venv, fall back to system pip
-    venv_pip = root / "venv" / "bin" / "pip"
-    if not venv_pip.exists():
-        # No venv available (e.g., sandbox environment) — fall back to system pip
-        import shutil
-        system_pip = shutil.which("pip") or shutil.which("pip3")
-        if system_pip:
-            venv_pip = Path(system_pip)
-            print(f"No venv found — using system pip: {system_pip}", file=sys.stderr)
-        else:
-            print(f"No venv found at {root}/venv/ and no system pip available", file=sys.stderr)
-            return 2
-
     # Determine level
     level = detect_level(cwd)
 
@@ -90,10 +77,30 @@ def main() -> int:
         req_paths.append(class_dir / "requirements.txt")
         req_paths.append(cwd / "requirements.txt")
 
-    # Install sequentially, skipping missing/empty
-    for req_path in req_paths:
-        if not should_install(req_path):
-            continue
+    # Short-circuit: if nothing is installable (all requirements empty/absent),
+    # succeed without ever requiring a pip binary. This keeps the
+    # "empty requirements ⇒ install-deps is a no-op" invariant honestly true
+    # for offline engagements that ship no venv.
+    installable = [p for p in req_paths if should_install(p)]
+    if not installable:
+        return 0
+
+    # Resolve pip — prefer venv, fall back to system pip. Only reached when
+    # there is at least one non-empty requirements file to install.
+    venv_pip = root / "venv" / "bin" / "pip"
+    if not venv_pip.exists():
+        # No venv available (e.g., sandbox environment) — fall back to system pip
+        import shutil
+        system_pip = shutil.which("pip") or shutil.which("pip3")
+        if system_pip:
+            venv_pip = Path(system_pip)
+            print(f"No venv found — using system pip: {system_pip}", file=sys.stderr)
+        else:
+            print(f"No venv found at {root}/venv/ and no system pip available", file=sys.stderr)
+            return 2
+
+    # Install sequentially (paths already filtered to non-empty)
+    for req_path in installable:
         rc = install_requirements(req_path, venv_pip)
         if rc != 0:
             print(f"pip install failed for {req_path}", file=sys.stderr)

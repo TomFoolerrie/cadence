@@ -8,6 +8,7 @@ Provides:
 - Pre-built fixtures for common test scenarios
 """
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -25,6 +26,23 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = PROJECT_ROOT / "plugin" / "scripts"
+
+
+def _load_init_task_module():
+    """Import init-task.py (hyphenated filename) so the test fixture can reuse
+    the SINGLE definition of the agent-facing plugin-root token, keeping
+    make_task() in lockstep with init-task.py (Ticket 01)."""
+    spec = importlib.util.spec_from_file_location(
+        "_cadence_init_task", SCRIPTS_DIR / "init-task.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# Single source of truth for the plugin-root token emitted into agent-facing
+# text — imported from init-task.py so the fixture cannot drift from production.
+PLUGIN_ROOT_TOKEN = _load_init_task_module().PLUGIN_ROOT_TOKEN
 
 DEFAULT_ENGAGEMENT = "Test Corp"
 DEFAULT_SCHEMA_VERSION = 1
@@ -137,18 +155,24 @@ def run_script(
     args: Optional[List[str]] = None,
     cwd: Optional[Path] = None,
     timeout: int = 10,
+    env: Optional[Dict[str, str]] = None,
 ) -> subprocess.CompletedProcess:
     """
     Run scripts/<script_name> via the current Python interpreter.
+
+    `env`, if given, overrides keys in the inherited environment (e.g. clearing
+    PATH to simulate "no system pip").
 
     Returns subprocess.CompletedProcess with stdout, stderr, returncode.
     """
     script_path = SCRIPTS_DIR / script_name
     cmd = [sys.executable, str(script_path)] + (args or [])
-    env = {"PYTHONDONTWRITEBYTECACHE": "1"}
+    base_env = {"PYTHONDONTWRITEBYTECACHE": "1"}
 
     full_env = os.environ.copy()
-    full_env.update(env)
+    full_env.update(base_env)
+    if env:
+        full_env.update(env)
 
     return subprocess.run(
         cmd,
@@ -288,13 +312,13 @@ def make_task(
     reference_content = (
         f"# reference — {name}\n\n"
         "## Write Restrictions\n"
-        "- `status.yaml` — Do not edit directly. Use: `python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py <status>`\n"
-        "- Do not create directories with mkdir. Use: `python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>`\n\n"
+        f"- `status.yaml` — Do not edit directly. Use: `python {PLUGIN_ROOT_TOKEN}/scripts/set-status.py <status>`\n"
+        f"- Do not create directories with mkdir. Use: `python {PLUGIN_ROOT_TOKEN}/scripts/init-period.py <period>`\n\n"
         "## Plugin Scripts\n"
         "| Script | Purpose | Usage |\n"
         "|--------|---------|-------|\n"
-        "| `set-status.py` | Change task status | `python ${CLAUDE_PLUGIN_ROOT}/scripts/set-status.py <status>` |\n"
-        "| `init-period.py` | Scaffold a new period directory | `python ${CLAUDE_PLUGIN_ROOT}/scripts/init-period.py <period>` |\n"
+        f"| `set-status.py` | Change task status | `python {PLUGIN_ROOT_TOKEN}/scripts/set-status.py <status>` |\n"
+        f"| `init-period.py` | Scaffold a new period directory | `python {PLUGIN_ROOT_TOKEN}/scripts/init-period.py <period>` |\n"
     )
     (task_dir / "reference.md").write_text(reference_content)
 

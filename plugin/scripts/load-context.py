@@ -186,6 +186,11 @@ def main() -> int:
     # Tools section
     task_tools = task_dir / "tools"
     class_tools = class_dir / "tools"
+    # Ticket 01, coupling inventory item 2: this reads the Claude-Code dir name
+    # `.claude/tools/` at runtime to assemble the global-tools tier. It is INERT
+    # under Pi — the dir is simply absent, so this branch is skipped and the
+    # global tier is empty (no error). It bakes the CC dir name into the context
+    # payload; a Pi home for global tools is deferred (out of milestone-1 scope).
     global_tools = root / ".claude" / "tools"
 
     tool_lines: list[str] = []
